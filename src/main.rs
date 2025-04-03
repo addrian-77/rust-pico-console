@@ -9,7 +9,8 @@ use std::time::Duration;
 fn main() {
     let mut game = Arc::new(Mutex::new(Snake {
         head: (8, 5, Facing::Right),
-        tail: (8, 3),
+        trail: VecDeque::<(i8, i8)>::new(),
+        can_update: false,
         frame: (0..15).map(|_| Vec::with_capacity(30)).collect(),
     }));
     game.lock().unwrap().init();
