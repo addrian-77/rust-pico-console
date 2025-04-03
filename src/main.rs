@@ -1,4 +1,4 @@
-include!("lib.rs");
+include!("snake.rs");
 
 use std::io::{stdin, Write};
 use std::sync::{Arc, Mutex};
@@ -7,9 +7,10 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    let mut game = Arc::new(Mutex::new(Player {
-        x: 10,
-        y: 10,
+    let mut game = Arc::new(Mutex::new(Snake {
+        head: (8, 5, Facing::Right),
+        tail: (8, 3),
+        frame: (0..15).map(|_| Vec::with_capacity(30)).collect(),
     }));
     game.lock().unwrap().init();
 
@@ -22,19 +23,20 @@ fn main() {
     loop {
         if let Ok(input) = rx.try_recv() {
             let mut game = game_clone.lock().unwrap();
-            game.update(&input);
+            game.handle_input(&input);
+            game.update_frame();
         }
 
         {
-            let game = game.lock().unwrap();
-            game.render();
+            let mut game = game.lock().unwrap();
+            game.draw_frame();
     
         }
         thread::sleep(Duration::from_millis(500));
     }
 }
 
-fn handle_input(tx: mpsc::Sender<InputState>) {
+fn handle_input(tx: mpsc::Sender<Input>) {
     let mut buffer = String::new();
     loop {
         print!("Write your input\n");
@@ -44,10 +46,10 @@ fn handle_input(tx: mpsc::Sender<InputState>) {
         stdin().read_line(&mut buffer);
         
         match buffer.trim() {
-            "u" => tx.send(InputState::Up).unwrap(),
-            "d" => tx.send(InputState::Down).unwrap(),
-            "l" => tx.send(InputState::Left).unwrap(),
-            "r" => tx.send(InputState::Right).unwrap(),
+            "u" => tx.send(Input::Up).unwrap(),
+            "d" => tx.send(Input::Down).unwrap(),
+            "l" => tx.send(Input::Left).unwrap(),
+            "r" => tx.send(Input::Right).unwrap(),
             _ => print!("Invalid input\n"),
         }
     } 
