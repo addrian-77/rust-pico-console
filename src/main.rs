@@ -38,7 +38,7 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_rp::init(Default::default());
     
-    let mut led = Output::new(p.PIN_2, Level::Low);
+    // let mut led = Output::new(p.PIN_2, Level::Low);
 
 
     let mut screen_config = embassy_rp::spi::Config::default();
