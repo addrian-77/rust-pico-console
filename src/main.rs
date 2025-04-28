@@ -1,21 +1,3 @@
-//! This example receives incomming udp packets and turns an led on or off depending on the payload
-//! In order to connect to the wifi network please create the following two files in the `src` folder:
-//! WIFI_SSID.txt and WIFI_PASSWORD.txt
-//! The files above should contain the exact ssid and password to connect to the wifi network. No newline characters or quotes.
-//!
-//! NOTE: This targets a RP Pico2 W or PR Pico2 WH. It does not work with the RP Pico2 board (non-wifi).
-//!
-//! How to run with a standard usb cable (no debug probe):
-//! The pico has a builtin bootloader that can be used as a replacement for a debug probe (like an ST link v2).
-//! Start with the usb cable unplugged then, while holding down the BOOTSEL button, plug it in. Then you can release the button.
-//! Mount the usb drive (this will be enumerated as USB mass storage) then run the following command:
-//! cargo run --bin 04_receive --release
-//!
-//! Troubleshoot:
-//! `Error: "Unable to find mounted pico"`
-//! This is because the pico is not in bootloader mode. You need to press down the BOOTSEL button when you plug it in and then release the button.
-//! You need to do this every time you download firmware onto the device.
-
 #![no_std]
 #![no_main]
 
@@ -32,7 +14,8 @@ use cyw43_pio::{
 use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
 
 use embassy_executor::{self, Spawner};
-use embassy_sync::blocking_mutex::{Mutex, raw::NoopRawMutex};
+use embassy_net::udp::UdpSocket;
+use embassy_sync::{blocking_mutex::{raw::{CriticalSectionRawMutex, NoopRawMutex}, Mutex}, signal::Signal};
 use embassy_time::{Delay, Duration, Timer};
 use embassy_rp::{
     gpio::{Level, Output}, pio::Pio, spi::Spi
@@ -54,13 +37,20 @@ use embedded_graphics::{
 
 mod init;
 use init::udp;
+
+mod menu;
+use menu::selector::Menu;
 mod irqs;
+use rust_pico_console::Input;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
+
+static mut CURRENT: i8 = 0;
+static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("main!");
@@ -88,7 +78,7 @@ async fn main(spawner: Spawner) {
     let mut display_spi = SpiDevice::new(&spi_bus, screen_cs);
     let mut buffer = [0_u8; 512];
     let di = SpiInterface::new(&mut display_spi, screen_dc, &mut buffer);
-    let mut screen = mipidsi::Builder::new(ST7735s, di)
+    let mut screen  = mipidsi::Builder::new(ST7735s, di)
         .reset_pin(screen_rst)
         .orientation(Orientation::new())
         .init(&mut Delay)
@@ -113,6 +103,9 @@ async fn main(spawner: Spawner) {
         p.DMA_CH0,
     );
     let socket = udp::udp_init(&spawner, cyw_pwr, cyw_spi, LOCAL_PORT).await;
+
+    spawner.spawn(receive(socket)).unwrap();
+
     info!("waiting for udp packets on port {}", LOCAL_PORT);
     
     Rectangle::new(Point::new(20, 10), Size::new(80, 16))
@@ -125,19 +118,46 @@ async fn main(spawner: Spawner) {
         .unwrap();
     Text::new( "Done!", Point::new(20, 20), style)
         .draw(&mut screen).unwrap();
+    
+    let mut main_menu = Menu {
+        title: "Main Menu",
+        options: &["Start Game", "Options", "Exit"],
+        selected: 0,
+    };
 
+    loop {
+        unsafe {
+            match CURRENT {
+                0 => main_menu.menu_loop(&mut screen).await,
+                _ => continue,
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn receive(socket: UdpSocket<'static>) {
     let mut buf: [u8; 1500] = [0; 1500];
     loop {
         match socket.recv_from(&mut buf).await {
             Ok((len, meta)) => match from_utf8(&buf[..len]) {
                 Ok(s) => {
-                    info!("received '{}' from {:?}", s, meta);
-                    Rectangle::new(Point::new(20, 10), Size::new(80, 16))
-                        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-                        .draw(&mut screen)
-                        .unwrap();
-                    Text::new(s, Point::new(20, 20), style)
-                        .draw(&mut screen).unwrap();
+                    let input: Input = match s {
+                        "w" => Input::Up,
+                        "a" => Input::Left,
+                        "s" => Input::Down,
+                        "d" => Input::Right,
+                        "u" => Input::Up2,
+                        "h" => Input::Left2,
+                        "j" => Input::Down2,
+                        "k" => Input::Right2,
+                        "e" => Input::Select,
+                        "q" => Input::Back,
+                        _ => Input::Ignore,
+                    };
+                    if input != Input::Ignore {
+                        INPUT_SIGNAL.signal(input);
+                    }
                 }
                 Err(_e) => warn!("received {} bytes from", len),
             },
