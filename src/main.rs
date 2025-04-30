@@ -40,16 +40,22 @@ use init::udp;
 
 mod menu;
 use menu::selector::Menu;
+
+mod games;
+use games::snake::Snake;
+
 mod irqs;
 use rust_pico_console::Input;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
+use heapless::{Vec, Deque};
+
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
 
-static mut CURRENT: i8 = 0;
+static mut CURRENT: i8 = 1;
 static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -116,22 +122,27 @@ async fn main(spawner: Spawner) {
         .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
         .draw(&mut screen)
         .unwrap();
-    Text::new( "Done!", Point::new(20, 20), style)
-        .draw(&mut screen).unwrap();
-    
-    let mut main_menu = Menu {
-        title: "Main Menu",
-        options: &["Start Game", "Options", "Exit"],
-        selected: 0,
-    };
+    // Text::new( "Done!", Point::new(20, 20), style)
+    //     .draw(&mut screen).unwrap();
 
     loop {
         unsafe {
             match CURRENT {
-                0 => main_menu.menu_loop(&mut screen).await,
+                0 => {
+                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &["Start game", "Options", "Exit"]);
+                    main_menu.menu_loop(&mut screen).await;
+                },
+                1 => {
+                    let mut frame = Vec::<u32, 32>::from_slice(&[0; 31]).unwrap();
+                    let mut body = Deque::<(u8, u8), 1025>::new();
+                    let mut snake: Snake = Snake::new(&mut frame, &mut body);
+                    snake.init(&mut screen);
+                    snake.snake_loop(&mut screen).await;
+                },
                 _ => continue,
             }
         }
+        info!("returned from loop");
     }
 }
 

@@ -16,6 +16,7 @@ use embedded_graphics::{
 use embassy_futures::select::{select, Either};
 use embassy_time::{Duration, Timer};
 use crate::INPUT_SIGNAL;
+use crate::CURRENT;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
@@ -23,9 +24,9 @@ use defmt::*;
 use rust_pico_console::Input;
 
 pub struct Menu<'a> {
-    pub title: &'a str,
-    pub options: &'a [&'a str],
-    pub selected: usize,
+    title: &'a str,
+    options: &'a [&'a str],
+    selected: usize,
 }
 
 impl <'a> Menu<'a> {
@@ -60,7 +61,7 @@ impl <'a> Menu<'a> {
         }
     }
     
-    pub fn handle_input(&mut self, input: Input) {
+    pub fn handle_input(&mut self, input: &Input) {
         match input {
             Input::Up => {
                 if self.selected > 0 {
@@ -89,8 +90,15 @@ impl <'a> Menu<'a> {
             match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(100))).await {
                 Either::First(input) => {
                     if(input == Input::Up || input == Input::Down || input == Input::Select || input == Input::Back) {
-                        self.handle_input(input);
+                        self.handle_input(&input);
                         self.draw(screen);
+                    }
+                    if(input == Input::Select) {
+                        unsafe {
+                            CURRENT = self.selected as i8;
+                        }
+                        info!("select detected, returning");
+                        return;
                     }
                 }
                 Either::Second(_) => {
