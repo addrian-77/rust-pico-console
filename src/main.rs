@@ -21,7 +21,7 @@ use embassy_rp::{
     gpio::{Level, Output}, pio::Pio, spi::Spi
 };
 
-use mipidsi::interface::SpiInterface;  
+use mipidsi::{interface::SpiInterface, options::Rotation};  
 use mipidsi::models::ST7735s;
 use mipidsi::options::Orientation;
 
@@ -110,32 +110,27 @@ async fn main(spawner: Spawner) {
     );
     let socket = udp::udp_init(&spawner, cyw_pwr, cyw_spi, LOCAL_PORT).await;
 
+    Rectangle::new(Point::new(15, 10), Size::new(90, 30))
+        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+        .draw(&mut screen)
+        .unwrap();
+
     spawner.spawn(receive(socket)).unwrap();
 
     info!("waiting for udp packets on port {}", LOCAL_PORT);
-    
-    Rectangle::new(Point::new(20, 10), Size::new(80, 16))
-        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-        .draw(&mut screen)
-        .unwrap();
-    Rectangle::new(Point::new(20, 26), Size::new(80, 16))
-        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-        .draw(&mut screen)
-        .unwrap();
-    // Text::new( "Done!", Point::new(20, 20), style)
-    //     .draw(&mut screen).unwrap();
 
     loop {
         unsafe {
             match CURRENT {
                 0 => {
-                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &["Start game", "Options", "Exit"]);
+                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &[]);
                     main_menu.menu_loop(&mut screen).await;
                 },
                 1 => {
                     let mut frame = Vec::<u32, 32>::from_slice(&[0; 31]).unwrap();
-                    let mut body = Deque::<(u8, u8), 1025>::new();
-                    let mut snake: Snake = Snake::new(&mut frame, &mut body);
+                    let mut body_1 = Deque::<(u8, u8), 1025>::new();
+                    let mut body_2 = Deque::<(u8, u8), 1025>::new();
+                    let mut snake: Snake = Snake::new(&mut frame, &mut body_1, &mut body_2);
                     snake.init(&mut screen);
                     snake.snake_loop(&mut screen).await;
                 },
@@ -151,7 +146,7 @@ async fn receive(socket: UdpSocket<'static>) {
     let mut buf: [u8; 1500] = [0; 1500];
     loop {
         match socket.recv_from(&mut buf).await {
-            Ok((len, meta)) => match from_utf8(&buf[..len]) {
+            Ok((len, _meta)) => match from_utf8(&buf[..len]) {
                 Ok(s) => {
                     let input: Input = match s {
                         "w" => Input::Up,

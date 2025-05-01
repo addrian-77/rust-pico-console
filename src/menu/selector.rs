@@ -15,22 +15,22 @@ use embedded_graphics::{
 };
 use embassy_futures::select::{select, Either};
 use embassy_time::{Duration, Timer};
-use crate::INPUT_SIGNAL;
-use crate::CURRENT;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
-use rust_pico_console::Input;
+use rust_pico_console::{Input, MenuOption};
+use crate::INPUT_SIGNAL;
+use crate::CURRENT;
 
 pub struct Menu<'a> {
     title: &'a str,
-    options: &'a [&'a str],
+    options: &'a [MenuOption],
     selected: usize,
 }
 
 impl <'a> Menu<'a> {
-    pub fn init(title: &'a str, options: &'a [&'a str]) -> Menu<'a> {
+    pub fn init(title: &'a str, options: &'a [MenuOption]) -> Menu<'a> {
         Menu {
             title,
             options,
@@ -55,7 +55,9 @@ impl <'a> Menu<'a> {
                 .draw(screen)
                 .unwrap();
             let color = if self.selected == i { Rgb565::YELLOW } else { Rgb565::CSS_ORANGE };
-            Text::new(option, Point::new(22, 46 + i as i32 * 16),MonoTextStyle::new(&FONT_6X10, color))
+            Text::new(match option {
+                _ => ""
+            }, Point::new(22, 46 + i as i32 * 16),MonoTextStyle::new(&FONT_6X10, color))
                 .draw(screen)
                 .unwrap();
         }
@@ -63,14 +65,14 @@ impl <'a> Menu<'a> {
     
     pub fn handle_input(&mut self, input: &Input) {
         match input {
-            Input::Up => {
+            Input::Up | Input::Up2 => {
                 if self.selected > 0 {
                     self.selected -= 1;
                 } else {
                     self.selected = self.options.len() - 1;
                 }
             }
-            Input::Down => {
+            Input::Down | Input::Down2 => {
                 if self.selected + 1 < self.options.len() {
                     self.selected += 1;
                 } else {
@@ -78,27 +80,27 @@ impl <'a> Menu<'a> {
                 }
             }
             Input::Select => {
-                info!("Selected option: {}", self.options[self.selected]);
+                // info!("Selected option: {}", self.options[self.selected]);
             }
             _ => {}
         }
     }
 
-    pub async fn menu_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+    pub async fn menu_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) -> MenuOption {
         self.draw(screen);
         loop {
             match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(100))).await {
                 Either::First(input) => {
-                    if(input == Input::Up || input == Input::Down || input == Input::Select || input == Input::Back) {
+                    if input == Input::Up || input == Input::Down || input == Input::Select || input == Input::Back {
                         self.handle_input(&input);
                         self.draw(screen);
                     }
-                    if(input == Input::Select) {
+                    if input == Input::Select {
                         unsafe {
                             CURRENT = self.selected as i8;
                         }
                         info!("select detected, returning");
-                        return;
+                        // return;
                     }
                 }
                 Either::Second(_) => {

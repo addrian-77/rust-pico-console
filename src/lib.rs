@@ -1,4 +1,5 @@
 #![no_std]
+
 #[derive(PartialEq)]
 pub enum Input {
     Up,
@@ -12,4 +13,8 @@ pub enum Input {
     Select,
     Back,
     Ignore
+}
+
+pub enum MenuOption {
+    
 }
