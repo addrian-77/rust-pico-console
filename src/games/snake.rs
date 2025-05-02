@@ -4,7 +4,7 @@ use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_rp::{
-    gpio::Output, spi::Spi
+    clocks::RoscRng, gpio::Output, spi::Spi
 };
 
 use mipidsi::interface::SpiInterface;  
@@ -21,6 +21,8 @@ use embassy_time::{Duration, Timer};
 use heapless::{
     Vec, Deque,
 };
+use rand::seq::SliceRandom;
+
 
 use crate::INPUT_SIGNAL;
 use crate::CURRENT;
@@ -43,6 +45,7 @@ pub struct Snake<'a> {
     tail_2: (u8, u8),
     facing_2: u8,
     updated_2: bool,
+    apple: (u8, u8),
     frame: &'a mut Vec::<u32, 32>,
     body_1: &'a mut Deque::<(u8, u8), 1025>,
     body_2: &'a mut Deque::<(u8, u8), 1025>,
@@ -64,16 +67,17 @@ fn checkval(value: u32, col: u8) -> bool {
 impl <'a> Snake<'a> {
     pub fn new(frame: &'a  mut Vec<u32, 32>, body_1: &'a mut Deque<(u8, u8), 1025>, body_2: &'a mut Deque<(u8, u8), 1025>) -> Snake <'a>{
         Snake {
-            head_1: (10, 3),
-            second_1: (9, 3),
-            tail_1: (3, 3),
+            head_1: (6, 3),
+            second_1: (5, 3),
+            tail_1: (2, 3),
             facing_1: 3,
             updated_1: false,
-            head_2: (10, 10),
-            second_2: (9, 10),
-            tail_2: (3, 10),
+            head_2: (6, 10),
+            second_2: (5, 10),
+            tail_2: (2, 10),
             facing_2: 3,
             updated_2: false,
+            apple: (10, 3),
             frame,
             body_1,
             body_2,
@@ -85,36 +89,20 @@ impl <'a> Snake<'a> {
         self.frame[3] = setval(self.frame[3], 4, true);
         self.frame[3] = setval(self.frame[3], 5, true);
         self.frame[3] = setval(self.frame[3], 6, true);
-        self.frame[3] = setval(self.frame[3], 7, true);
-        self.frame[3] = setval(self.frame[3], 8, true);
-        self.frame[3] = setval(self.frame[3], 9, true);
-        self.frame[3] = setval(self.frame[3], 10, true);
         self.body_1.push_front((3, 3)).unwrap();
         self.body_1.push_front((4, 3)).unwrap();
         self.body_1.push_front((5, 3)).unwrap();
         self.body_1.push_front((6, 3)).unwrap();
-        self.body_1.push_front((7, 3)).unwrap();
-        self.body_1.push_front((8, 3)).unwrap();
-        self.body_1.push_front((9, 3)).unwrap();
-        self.body_1.push_front((10, 3)).unwrap();
         self.updated_1 = true;
 
         self.frame[10] = setval(self.frame[10], 3, true);
         self.frame[10] = setval(self.frame[10], 4, true);
         self.frame[10] = setval(self.frame[10], 5, true);
         self.frame[10] = setval(self.frame[10], 6, true);
-        self.frame[10] = setval(self.frame[10], 7, true);
-        self.frame[10] = setval(self.frame[10], 8, true);
-        self.frame[10] = setval(self.frame[10], 9, true);
-        self.frame[10] = setval(self.frame[10], 10, true);
         self.body_2.push_front((3, 10)).unwrap();
         self.body_2.push_front((4, 10)).unwrap();
         self.body_2.push_front((5, 10)).unwrap();
         self.body_2.push_front((6, 10)).unwrap();
-        self.body_2.push_front((7, 10)).unwrap();
-        self.body_2.push_front((8, 10)).unwrap();
-        self.body_2.push_front((9, 10)).unwrap();
-        self.body_2.push_front((10, 10)).unwrap();
         self.updated_2 = true;
 
         for i in 0..25 {
@@ -153,9 +141,31 @@ impl <'a> Snake<'a> {
         // for value in self.body_1.iter() {
         //     info!("part {}, {}", value.0, value.1);
         // }
+        if self.head_1 != self.apple {
+            match self.body_1.back() {
+                Some(t) => self.tail_1 = *t,
+                None => (),
+            }
+            self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
+            self.body_1.pop_back();
+        } else {
+            self.generate_apple();
+        }
+
         if checkval(self.frame[self.head_1.1 as usize], self.head_1.0) == true {
             info!("collision detected, caused by 1st player at {}. {}", self.head_1.0, self.head_1.1);
             return false;
+        }
+
+        if self.head_2 != self.apple {
+            match self.body_2.back() {
+                Some(t) => self.tail_2 = *t,
+                None => (),
+            }
+            self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
+            self.body_2.pop_back();
+        } else {
+            self.generate_apple();
         }
 
         if checkval(self.frame[self.head_2.1 as usize], self.head_2.0) == true {
@@ -177,37 +187,45 @@ impl <'a> Snake<'a> {
         
         self.frame[self.head_1.1 as usize] = setval(self.frame[self.head_1.1 as usize], self.head_1.0, true);
         self.body_1.push_front(self.head_1).unwrap();
-        self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
-        self.body_1.pop_back();
         // info!("head_1 value {}", self.head_1);
         // info!("changed frame (head_1 added) to {:#034b} at index {}", self.frame[self.head_1.1 as usize], self.head_1.0);
         // info!("tail_1 value {}", self.tail_1);
         // info!("changed frame (tail_1 removed) from {:#034b} at index {}", self.frame[self.tail_1.1 as usize], self.tail_1.0);
-        match self.body_1.back() {
-            Some(t) => self.tail_1 = *t,
-            None => (),
-        }
 
         self.frame[self.head_2.1 as usize] = setval(self.frame[self.head_2.1 as usize], self.head_2.0, true);
         self.body_2.push_front(self.head_2).unwrap();
-        self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
-        self.body_2.pop_back();
         // info!("head_2 value{}", self.head_2);
         // info!("changed frame (head_2 added) to {:#034b} at index {}", self.frame[self.head_2.1 as usize], self.head_2.0);
         // info!("tail_2 value {}", self.tail_2);
         // info!("changed frame (tail_2 removed) from {:#034b} at index {}", self.frame[self.tail_2.1 as usize], self.tail_2.0);
-        match self.body_2.back() {
-            Some(t) => self.tail_2 = *t,
-            None => (),
-        }
         // info!("deque len {}" , self.body.len());
         return true;
     }
- 
+    
+    fn generate_apple(&mut self) {
+        let mut empty_spaces: Vec<(u8, u8), 576> = Vec::new();
+        for i in 0..23 as u8 {
+            for j in 0..23 as u8 {
+                if checkval(self.frame[i as usize], j) == false {
+                    empty_spaces.push((i, j)).unwrap();
+                }
+            }
+        }
+        let mut rng = RoscRng;
+        match empty_spaces.choose(&mut rng) {
+            Some(t) => self.apple = *t,
+            None => {} 
+        }
+    }
 
     fn draw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        Rectangle::new(Point::new((self.head_1.0 + OFFSET_X) as i32 * 5, (self.head_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+        Rectangle::new(Point::new((self.apple.0 + OFFSET_X) as i32 * 5, (self.apple.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
             .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+            .draw(screen)
+            .unwrap();
+
+        Rectangle::new(Point::new((self.head_1.0 + OFFSET_X) as i32 * 5, (self.head_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
             .draw(screen)
             .unwrap();
 
@@ -216,10 +234,12 @@ impl <'a> Snake<'a> {
             .draw(screen)
             .unwrap();
 
-        Rectangle::new(Point::new((self.tail_1.0 + OFFSET_X) as i32 * 5, (self.tail_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-            .draw(screen)
-            .unwrap();
+        if self.head_1 != self.tail_1 {
+            Rectangle::new(Point::new((self.tail_1.0 + OFFSET_X) as i32 * 5, (self.tail_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+        }
 
         Rectangle::new(Point::new((self.head_2.0 + OFFSET_X) as i32 * 5, (self.head_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
             .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
@@ -231,11 +251,12 @@ impl <'a> Snake<'a> {
             .draw(screen)
             .unwrap();
 
-
-        Rectangle::new(Point::new((self.tail_2.0 + OFFSET_X) as i32 * 5, (self.tail_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-            .draw(screen)
-            .unwrap();
+        if self.head_2 != self.tail_2 {
+            Rectangle::new(Point::new((self.tail_2.0 + OFFSET_X) as i32 * 5, (self.tail_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+        }
         
         // info!("the tail is {}", self.tail);
         match self.body_1.back() {
