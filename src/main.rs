@@ -42,7 +42,8 @@ mod menu;
 use menu::selector::Menu;
 
 mod games;
-use games::snake::Snake;
+use games::{snake::Snake, spaceinvaders};
+use games::spaceinvaders::{ SpaceInvaders, Enemy };
 
 mod irqs;
 use rust_pico_console::Input;
@@ -50,12 +51,12 @@ use rust_pico_console::Input;
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
-use heapless::{Vec, Deque};
+use heapless::{Vec, Deque, spsc::Queue};
 
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
 
-static mut CURRENT: i8 = 1;
+static mut CURRENT: i8 = 2;
 static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -130,10 +131,48 @@ async fn main(spawner: Spawner) {
                     let mut frame = Vec::<u32, 32>::from_slice(&[0; 31]).unwrap();
                     let mut body_1 = Deque::<(u8, u8), 1025>::new();
                     let mut body_2 = Deque::<(u8, u8), 1025>::new();
-                    let mut snake: Snake = Snake::new(&mut frame, &mut body_1, &mut body_2);
+                    let mut apples = Vec::<u32, 32>::from_slice(&[0; 31]).unwrap();
+                    let mut snake: Snake = Snake::new(&mut frame, &mut body_1, &mut body_2, &mut apples);
                     snake.init(&mut screen);
-                    snake.snake_loop(&mut screen).await;
+                    snake.game_loop(&mut screen).await;
                 },
+                2 => {
+                    let mut enemies = Vec::<Vec::<(Enemy, u8), 5>, 5>::from_iter(
+                        [
+                            Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
+                            Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
+                            Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
+                            Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
+                            Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
+                        ]
+                        .iter()
+                        .cloned()
+                    );
+                    let mut player1_projectiles = Vec::<(u8, u8, bool), 20>::new();
+                    let mut player2_projectiles = Vec::<(u8, u8, bool), 20>::new();
+                    let mut enemy_projectiles = Vec::<(u8, bool), 5>::new();
+                    let mut spaceinvaders: SpaceInvaders = SpaceInvaders::new(&mut enemies, &mut enemy_projectiles, &mut player1_projectiles, &mut player2_projectiles);
+                    spaceinvaders.init();
+                    spaceinvaders.game_loop(&mut screen).await;
+                }
+                3 => {
+                    Rectangle::new(Point::new( 0 , 0), Size::new(10, 10))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_TURQUOISE))
+                        .draw(&mut screen)
+                        .unwrap();  
+
+                        Rectangle::new(Point::new( 20 , 0), Size::new(10, 10))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                        .draw(&mut screen)
+                        .unwrap();  
+
+
+                        Rectangle::new(Point::new( 0 , 20), Size::new(10, 10))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_FLORAL_WHITE))
+                        .draw(&mut screen)
+                        .unwrap();  
+                    loop{}
+                }
                 _ => continue,
             }
         }
@@ -153,10 +192,12 @@ async fn receive(socket: UdpSocket<'static>) {
                         "a" => Input::Left,
                         "s" => Input::Down,
                         "d" => Input::Right,
+                        "f" => Input::Fire,
                         "u" => Input::Up2,
                         "h" => Input::Left2,
                         "j" => Input::Down2,
                         "k" => Input::Right2,
+                        "g" => Input::Fire2,
                         "e" => Input::Select,
                         "q" => Input::Back,
                         _ => Input::Ignore,

@@ -40,15 +40,19 @@ pub struct Snake<'a> {
     tail_1: (u8, u8),
     facing_1: u8,
     updated_1: bool,
+    active_1: bool,
     head_2: (u8, u8),
     second_2: (u8, u8),
     tail_2: (u8, u8),
     facing_2: u8,
     updated_2: bool,
+    active_2: bool,
     apple: (u8, u8),
     frame: &'a mut Vec::<u32, 32>,
     body_1: &'a mut Deque::<(u8, u8), 1025>,
     body_2: &'a mut Deque::<(u8, u8), 1025>,
+    apples: &'a mut Vec::<u32, 32>,
+    apples_count: u16,
 }
 
 fn setval(value: u32, col: u8, set: bool) -> u32 {
@@ -65,22 +69,26 @@ fn checkval(value: u32, col: u8) -> bool {
 
 
 impl <'a> Snake<'a> {
-    pub fn new(frame: &'a  mut Vec<u32, 32>, body_1: &'a mut Deque<(u8, u8), 1025>, body_2: &'a mut Deque<(u8, u8), 1025>) -> Snake <'a>{
+    pub fn new(frame: &'a  mut Vec<u32, 32>, body_1: &'a mut Deque<(u8, u8), 1025>, body_2: &'a mut Deque<(u8, u8), 1025>, apples: &'a mut Vec<u32, 32>) -> Snake <'a>{
         Snake {
             head_1: (6, 3),
             second_1: (5, 3),
             tail_1: (2, 3),
             facing_1: 3,
             updated_1: false,
+            active_1: true,
             head_2: (6, 10),
             second_2: (5, 10),
             tail_2: (2, 10),
             facing_2: 3,
             updated_2: false,
+            active_2: true,
             apple: (10, 3),
             frame,
             body_1,
             body_2,
+            apples,
+            apples_count: 1,
         }
     }
     pub fn init(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
@@ -142,35 +150,59 @@ impl <'a> Snake<'a> {
         //     info!("part {}, {}", value.0, value.1);
         // }
         if self.head_1 != self.apple {
-            match self.body_1.back() {
-                Some(t) => self.tail_1 = *t,
-                None => (),
+            if checkval(self.apples[self.head_1.1 as usize], self.head_1.0) {
+                self.apples_count -= 1;
+            } else {
+                match self.body_1.back() {
+                    Some(t) => self.tail_1 = *t,
+                    None => (),
+                }
+                self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
+                self.body_1.pop_back();
             }
-            self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
-            self.body_1.pop_back();
-        } else {
+        } else if self.apples_count == 0 {
             self.generate_apple();
+        }
+        for (i, value) in self.apples.iter().enumerate() {
+            info!("index {} {:#034b}", i, value);
         }
 
         if checkval(self.frame[self.head_1.1 as usize], self.head_1.0) == true {
             info!("collision detected, caused by 1st player at {}. {}", self.head_1.0, self.head_1.1);
-            return false;
-        }
-
-        if self.head_2 != self.apple {
-            match self.body_2.back() {
-                Some(t) => self.tail_2 = *t,
-                None => (),
+            self.active_1 = false;
+            for value in self.body_1.iter() {
+                self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
+                self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
+                self.apples_count += 1;
             }
-            self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
-            self.body_2.pop_back();
+            return self.active_1 || self.active_2;
+        }
+        
+        if self.head_2 != self.apple {
+            if checkval(self.apples[self.head_2.1 as usize], self.head_2.0) {
+                self.apples_count -= 1;
+            } else {
+                match self.body_2.back() {
+                    Some(t) => self.tail_2 = *t,
+                    None => (),
+                }
+                self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
+                self.body_2.pop_back();
+            }
         } else {
             self.generate_apple();
         }
+        
 
         if checkval(self.frame[self.head_2.1 as usize], self.head_2.0) == true {
             info!("collision detected, caused by 2nd player at {}, {}", self.head_2.0, self.head_2.1);
-            return false;
+            self.active_2 = false;
+            for value in self.body_2.iter() {
+                self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
+                self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
+                self.apples_count += 1;
+            }
+            return self.active_1 || self.active_2;
         }
         // apple logic?
         // if apple => don't remove tail
@@ -219,58 +251,72 @@ impl <'a> Snake<'a> {
     }
 
     fn draw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        if self.active_1 && self.active_2 == false {
+            for (index, value) in self.apples.iter().enumerate() {
+                for j in 0..31 {
+                    if checkval(*value, j) {
+                        Rectangle::new(Point::new((index as u8 + OFFSET_X) as i32 * 5, (j + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                            .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+                            .draw(screen)
+                            .unwrap();
+                    }
+                }
+            }
+        }
         Rectangle::new(Point::new((self.apple.0 + OFFSET_X) as i32 * 5, (self.apple.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
             .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
             .draw(screen)
             .unwrap();
 
-        Rectangle::new(Point::new((self.head_1.0 + OFFSET_X) as i32 * 5, (self.head_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
-            .draw(screen)
-            .unwrap();
+        if self.active_1 {
+            Rectangle::new(Point::new((self.head_1.0 + OFFSET_X) as i32 * 5, (self.head_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+                .draw(screen)
+                .unwrap();
 
-        Rectangle::new(Point::new((self.second_1.0 + OFFSET_X) as i32 * 5, (self.second_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_LIME_GREEN))
-            .draw(screen)
-            .unwrap();
-
-        if self.head_1 != self.tail_1 {
-            Rectangle::new(Point::new((self.tail_1.0 + OFFSET_X) as i32 * 5, (self.tail_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+            Rectangle::new(Point::new((self.second_1.0 + OFFSET_X) as i32 * 5, (self.second_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_LIME_GREEN))
+                .draw(screen)
+                .unwrap();
+            
+            if self.head_1 != self.tail_1 {
+                Rectangle::new(Point::new((self.tail_1.0 + OFFSET_X) as i32 * 5, (self.tail_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
                 .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
                 .draw(screen)
                 .unwrap();
+            }
+            match self.body_1.back() {
+                Some(t) => self.tail_1 = *t,
+                None => (),
+            };
+            self.updated_1 = false;
         }
-
-        Rectangle::new(Point::new((self.head_2.0 + OFFSET_X) as i32 * 5, (self.head_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
-            .draw(screen)
-            .unwrap();
-
-        Rectangle::new(Point::new((self.second_2.0 + OFFSET_X) as i32 * 5, (self.second_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-            .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
-            .draw(screen)
-            .unwrap();
-
-        if self.head_2 != self.tail_2 {
-            Rectangle::new(Point::new((self.tail_2.0 + OFFSET_X) as i32 * 5, (self.tail_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
-                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+        if self.active_2 {
+            Rectangle::new(Point::new((self.head_2.0 + OFFSET_X) as i32 * 5, (self.head_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
                 .draw(screen)
                 .unwrap();
+
+            Rectangle::new(Point::new((self.second_2.0 + OFFSET_X) as i32 * 5, (self.second_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                .draw(screen)
+                .unwrap();
+
+            if self.head_2 != self.tail_2 {
+                Rectangle::new(Point::new((self.tail_2.0 + OFFSET_X) as i32 * 5, (self.tail_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(screen)
+                    .unwrap();
+            }
+            match self.body_2.back() {
+                Some(t) => self.tail_2 = *t,
+                None => (),
+            };
+            self.updated_2 = false;
         }
-        
         // info!("the tail is {}", self.tail);
-        match self.body_1.back() {
-            Some(t) => self.tail_1 = *t,
-            None => (),
-        };
 
-        match self.body_2.back() {
-            Some(t) => self.tail_2 = *t,
-            None => (),
-        };
 
-        self.updated_1 = false;
-        self.updated_2 = false;
         // info!("changed tail to {}", self.tail);
     }
     
@@ -295,9 +341,9 @@ impl <'a> Snake<'a> {
         }
     }
 
-    pub async fn snake_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+    pub async fn game_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
         loop {
-            match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(150))).await {
+            match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(250))).await {
                 Either::First(input) => {
                     if !(self.updated_1 || self.updated_2) {
                         self.handle_input(&input);
