@@ -31,6 +31,8 @@ use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
 use rust_pico_console::Input;
+use rust_pico_console::MenuOption;
+use crate::Menu;
 
 static OFFSET_X: u8 = 1;
 static OFFSET_Y: u8 = 7;
@@ -163,9 +165,9 @@ impl <'a> Snake<'a> {
         } else if self.apples_count == 0 {
             self.generate_apple();
         }
-        for (i, value) in self.apples.iter().enumerate() {
-            info!("index {} {:#034b}", i, value);
-        }
+        // for (i, value) in self.apples.iter().enumerate() {
+        //     info!("index {} {:#034b}", i, value);
+        // }
 
         if checkval(self.frame[self.head_1.1 as usize], self.head_1.0) == true {
             info!("collision detected, caused by 1st player at {}. {}", self.head_1.0, self.head_1.1);
@@ -319,14 +321,100 @@ impl <'a> Snake<'a> {
 
         // info!("changed tail to {}", self.tail);
     }
-    
-    fn handle_input(&mut self, input: &Input) {
-        match input {
-            Input::Select => {
-                
+
+    fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        Rectangle::new(Point::new(0, 0), Size::new(128, 160))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        for i in 0..25 {
+            Rectangle::new(Point::new(OFFSET_X as i32 * 5 - 1 + 5 * i, (OFFSET_Y * 5 - 1) as i32), Size::new(1, 121))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_DARK_SEA_GREEN))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(OFFSET_X as i32 * 5 - 1, (OFFSET_Y * 5 - 1) as i32 + 5 * i), Size::new(120, 1))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_DARK_SEA_GREEN))
+                .draw(screen)
+                .unwrap();
+        }
+        
+        if self.active_1 && self.active_2 == false {
+            for (index, value) in self.apples.iter().enumerate() {
+                for j in 0..31 {
+                    if checkval(*value, j) {
+                        Rectangle::new(Point::new((index as u8 + OFFSET_X) as i32 * 5, (j + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                            .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+                            .draw(screen)
+                            .unwrap();
+                    }
+                }
             }
+        }
+        Rectangle::new(Point::new((self.apple.0 + OFFSET_X) as i32 * 5, (self.apple.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+            .draw(screen)
+            .unwrap();
+
+        if self.active_1 {
+            for part in self.body_1.iter() {
+                if *part != self.head_1 && *part != self.second_1 && *part != self.tail_1 {
+                    Rectangle::new(Point::new((part.0 + OFFSET_X) as i32 * 5, (part.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+                        .draw(screen)
+                        .unwrap();    
+                }
+            }
+            Rectangle::new(Point::new((self.head_1.0 + OFFSET_X) as i32 * 5, (self.head_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+                .draw(screen)
+                .unwrap();
+
+            Rectangle::new(Point::new((self.second_1.0 + OFFSET_X) as i32 * 5, (self.second_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_LIME_GREEN))
+                .draw(screen)
+                .unwrap();
+
+            if self.head_1 != self.tail_1 {
+                Rectangle::new(Point::new((self.tail_1.0 + OFFSET_X) as i32 * 5, (self.tail_1.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(screen)
+                    .unwrap();
+            }
+        }
+
+        if self.active_2 {
+            for part in self.body_2.iter() {
+                if *part != self.head_2 && *part != self.second_2 && *part != self.tail_2 {
+                    Rectangle::new(Point::new((part.0 + OFFSET_X) as i32 * 5, (part.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                        .draw(screen)
+                        .unwrap();    
+                }
+            }
+            Rectangle::new(Point::new((self.head_2.0 + OFFSET_X) as i32 * 5, (self.head_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+                .draw(screen)
+                .unwrap();
+
+            Rectangle::new(Point::new((self.second_2.0 + OFFSET_X) as i32 * 5, (self.second_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                .draw(screen)
+                .unwrap();
+
+            if self.head_2 != self.tail_2 {
+                Rectangle::new(Point::new((self.tail_2.0 + OFFSET_X) as i32 * 5, (self.tail_2.1 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(screen)
+                    .unwrap();
+            }
+        }
+    }
+    
+    fn handle_input(&mut self, input: &Input) -> bool {
+        match input {
+            Input::Select => {}
             Input::Back => {
-                
+                return false
             }
             Input::Up => if self.facing_1 != 1 && self.updated_1 == false { self.facing_1 = 0; self.updated_1 = true },
             Input::Down => if self.facing_1 != 0 && self.updated_1 == false { self.facing_1 = 1; self.updated_1 = true },
@@ -339,6 +427,7 @@ impl <'a> Snake<'a> {
             Input::Right2 => if self.facing_2 != 2 && self.updated_2 == false { self.facing_2 = 3; self.updated_2 = true },
             _ => {}
         }
+        true
     }
 
     pub async fn game_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
@@ -346,7 +435,24 @@ impl <'a> Snake<'a> {
             match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(250))).await {
                 Either::First(input) => {
                     if !(self.updated_1 || self.updated_2) {
-                        self.handle_input(&input);
+                        if self.handle_input(&input) == false {
+                            // create pause menu
+                            let mut pause_menu: Menu<'_> = Menu::init("Pause menu", &[MenuOption::Resume, MenuOption::Exit], screen);
+                            let result: MenuOption = pause_menu.menu_loop(screen).await;
+                            info!("obtained result... somehow?");
+                            match result {
+                                MenuOption::Resume | MenuOption::None => {
+                                    self.redraw(screen);
+                                    Timer::after(Duration::from_millis(100)).await;
+                                    INPUT_SIGNAL.reset();
+                                },
+                                MenuOption::Exit => {
+                                    unsafe { CURRENT = 0 };
+                                    return;
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
                 _ => {}

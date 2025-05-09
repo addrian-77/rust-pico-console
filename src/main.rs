@@ -42,11 +42,14 @@ mod menu;
 use menu::selector::Menu;
 
 mod games;
-use games::{snake::Snake, spaceinvaders};
-use games::spaceinvaders::{ SpaceInvaders, Enemy };
+use games::{
+    snake::Snake, 
+    spaceinvaders:: {SpaceInvaders, Enemy}, 
+    sokoban:: Sokoban
+};
 
 mod irqs;
-use rust_pico_console::Input;
+use rust_pico_console::{Input, MenuOption};
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
@@ -56,7 +59,7 @@ use heapless::{Vec, Deque, spsc::Queue};
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
 
-static mut CURRENT: i8 = 2;
+static mut CURRENT: i8 = 0;
 static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -121,11 +124,23 @@ async fn main(spawner: Spawner) {
     info!("waiting for udp packets on port {}", LOCAL_PORT);
 
     loop {
+        Rectangle::new(Point::new( 0 , 0), Size::new(128, 160))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(&mut screen)
+            .unwrap(); 
         unsafe {
             match CURRENT {
                 0 => {
-                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &[]);
-                    main_menu.menu_loop(&mut screen).await;
+                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &[MenuOption::Snake, MenuOption::SpaceInvaders, MenuOption::Sokoban, MenuOption::Debug], &mut screen);
+                    let result: MenuOption = main_menu.menu_loop(&mut screen).await;
+                    match result {
+                        MenuOption::None => CURRENT = 0,
+                        MenuOption::Snake => CURRENT = 1,
+                        MenuOption::SpaceInvaders => CURRENT = 2,
+                        MenuOption::Sokoban => CURRENT = 3,
+                        MenuOption::Debug => CURRENT = 10,
+                        _ => {}
+                    }
                 },
                 1 => {
                     let mut frame = Vec::<u32, 32>::from_slice(&[0; 31]).unwrap();
@@ -137,7 +152,7 @@ async fn main(spawner: Spawner) {
                     snake.game_loop(&mut screen).await;
                 },
                 2 => {
-                    let mut enemies = Vec::<Vec::<(Enemy, u8), 5>, 5>::from_iter(
+                    let mut enemies = Vec::<Vec::<(Enemy, u8), 5>, 4>::from_iter(
                         [
                             Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
                             Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
@@ -148,14 +163,42 @@ async fn main(spawner: Spawner) {
                         .iter()
                         .cloned()
                     );
+                    let mut last_row = Vec::<(Enemy, u8, u8, bool), 5>::from_iter([(Enemy::None, 0, 0, false); 5].iter().cloned());
+                    let mut enemy_projectiles = Vec::<(u8, u8, u8, bool), 5>::new();
                     let mut player1_projectiles = Vec::<(u8, u8, bool), 20>::new();
                     let mut player2_projectiles = Vec::<(u8, u8, bool), 20>::new();
-                    let mut enemy_projectiles = Vec::<(u8, bool), 5>::new();
-                    let mut spaceinvaders: SpaceInvaders = SpaceInvaders::new(&mut enemies, &mut enemy_projectiles, &mut player1_projectiles, &mut player2_projectiles);
+                    let mut spaceinvaders: SpaceInvaders = SpaceInvaders::new(&mut enemies, &mut last_row, &mut enemy_projectiles, &mut player1_projectiles, &mut player2_projectiles);
                     spaceinvaders.init();
                     spaceinvaders.game_loop(&mut screen).await;
-                }
+                },
                 3 => {
+                    let mut frame = Vec::<Vec::<u8, 15>, 15>::from_iter(
+                        [
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                            Vec::from_iter([0; 15].iter().cloned()),
+                        ]
+                        .iter()
+                        .cloned()
+                    );
+                    let mut destinations = Vec::<(u8, u8), 20>::new();
+                    let mut sokoban: Sokoban = Sokoban::new(&mut frame, &mut destinations); 
+                    sokoban.init();
+                    sokoban.game_loop(&mut screen).await;
+                }
+                // debug, the coordinates are inverted
+                10 => {
                     Rectangle::new(Point::new( 0 , 0), Size::new(10, 10))
                         .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_TURQUOISE))
                         .draw(&mut screen)

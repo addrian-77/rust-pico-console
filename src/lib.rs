@@ -17,6 +17,13 @@ pub enum Input {
     Ignore
 }
 
+#[derive(Clone,Copy)]
 pub enum MenuOption {
-    
+    None,
+    Snake,
+    SpaceInvaders,
+    Sokoban,
+    Resume, 
+    Exit,
+    Debug,
 }

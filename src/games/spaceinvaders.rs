@@ -17,13 +17,13 @@ use embedded_graphics::{
     }, text::Text
 };
 use embassy_futures::select::{select, Either};
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 
 use heapless::{
     Vec, spsc::Queue,
 };
 
-use tinytga::Tga;
+use rand::seq::SliceRandom;
 
 use crate::INPUT_SIGNAL;
 use crate::CURRENT;
@@ -64,8 +64,10 @@ pub struct SpaceInvaders<'a> {
     player2_projectiles: &'a mut Vec<(u8, u8, bool), 20>,
     player1_lives: u8,
     player2_lives: u8,
-    enemies: &'a mut Vec<Vec<(Enemy, u8),5>,5>,
-    enemy_projectiles: &'a mut Vec<(u8, bool), 5>,
+    enemies: &'a mut Vec<Vec<(Enemy, u8),5>,4>,
+    last_row: &'a mut Vec<(Enemy, u8, u8, bool), 5>,
+    enemy_projectiles: &'a mut Vec<(u8, u8, u8, bool), 5>,
+    projectile_cooldown: u8,
     enemies_count: u8,
     level: u8,
     score: u32,
@@ -75,8 +77,9 @@ pub struct SpaceInvaders<'a> {
 }
 
 impl <'a> SpaceInvaders<'a> {
-    pub fn new(enemies: &'a mut Vec<Vec<(Enemy, u8), 5>, 5> , 
-    enemy_projectiles: &'a mut Vec<(u8, bool), 5>,
+    pub fn new(enemies: &'a mut Vec<Vec<(Enemy, u8), 5>, 4> , 
+    last_row: &'a mut Vec<(Enemy, u8, u8, bool), 5>,
+    enemy_projectiles: &'a mut Vec<(u8, u8, u8, bool), 5>,
     player1_projectiles: &'a mut Vec<(u8, u8, bool), 20>,
     player2_projectiles: &'a mut Vec<(u8, u8, bool), 20>) -> SpaceInvaders <'a> {
         SpaceInvaders { 
@@ -84,16 +87,18 @@ impl <'a> SpaceInvaders<'a> {
             player1_pos_prev: 0,
             player2_pos: 74,
             player2_pos_prev: 0,
-            player1_cooldown: 40,
-            player2_cooldown: 40,
+            player1_cooldown: 0,
+            player2_cooldown: 0,
             player1_projectiles,
             player2_projectiles,
             player1_lives: 3,
             player2_lives: 3,
             enemies,
+            last_row,
             enemy_projectiles,
+            projectile_cooldown: 50,
             enemies_count: 0,
-            level: 1, 
+            level: 2, 
             score: 100,
             step: 0,
             speed: 300,
@@ -110,6 +115,7 @@ impl <'a> SpaceInvaders<'a> {
             self.enemies[0][0] = (Enemy::Boss2, 20);
             for i in 0..5 {
                 self.enemies[3][i] = (Enemy::Class3, 3);
+                self.last_row[i] = (Enemy::Class3, i as u8, 3, false);
             }
             self.enemies_count = 6;
         } else if self.level % 5 == 0 {
@@ -117,6 +123,7 @@ impl <'a> SpaceInvaders<'a> {
             self.enemies[0][0] = (Enemy::Boss1, 20);
             for i in 0..5 {
                 self.enemies[3][i] = (Enemy::Class3, 3);
+                self.last_row[i] = (Enemy::Class3, i as u8, 3, false);
             }
             self.enemies_count = 6;
         } else {
@@ -128,12 +135,16 @@ impl <'a> SpaceInvaders<'a> {
                             self.enemies[i][j] = (Enemy::Class1, 1); 
                         }
                     }
+                    for i in 0..5 {
+                        self.last_row[i] = (Enemy::Class1, i as u8, 4, false);
+                    }
                     self.enemies_count = 20;
                 }
                 2 => {
                     //first row category2
                     for i in 0..5 {
                         self.enemies[0][i] = (Enemy::Class2, 2);
+                        self.last_row[i] = (Enemy::Class1, i as u8, 4, false);
                     }
                     
                     for i in 1..4 {
@@ -149,6 +160,7 @@ impl <'a> SpaceInvaders<'a> {
                     for i in 0..5 {
                         self.enemies[0][i] = (Enemy::Class2, 2);
                         self.enemies[1][i] = (Enemy::Class2, 2);
+                        self.last_row[i] = (Enemy::Class1, i as u8, 4, false);
                     }
                     
                     for i in 2..4 {
@@ -164,6 +176,9 @@ impl <'a> SpaceInvaders<'a> {
                         for j in 0..5 {
                             self.enemies[i][j] = (Enemy::Class2, 2); 
                         }
+                    }
+                    for i in 0..5 {
+                        self.last_row[i] = (Enemy::Class2, i as u8, 4, false);
                     }
                     self.enemies_count = 20;
                 }
@@ -212,6 +227,21 @@ impl <'a> SpaceInvaders<'a> {
                                         self.enemies[y][x].0 = Enemy::None;
                                         self.enemies[y][x].1 = 0;
                                         self.enemies_count -= 1;
+                                        let mut posy = 4;
+                                        loop {
+                                            if self.enemies[posy][x].0 != Enemy::None {
+                                                self.last_row[posy] = (self.enemies[posy][x].0, x as u8, posy as u8, false);
+                                                break;
+                                            }
+                                            if posy == 0 && self.enemies[posy][x].0 == Enemy::None {
+                                                self.last_row[posy] = (Enemy::None, 0, 0, false);
+                                            }
+                                            if posy > 0 {
+                                                posy -= 1;
+                                            } else {
+                                                break;
+                                            }
+                                        }
                                     } else {
                                         self.enemies[y][x].1 -= 1;
                                     }
@@ -226,7 +256,6 @@ impl <'a> SpaceInvaders<'a> {
                     }
                 }
             }
-
 
             self.player2_projectiles.retain(|projectile| projectile.2);
             for projectile in self.player2_projectiles.iter_mut() {
@@ -254,6 +283,21 @@ impl <'a> SpaceInvaders<'a> {
                                         self.enemies[y][x].0 = Enemy::None;
                                         self.enemies[y][x].1 = 0;
                                         self.enemies_count -= 1;
+                                        let mut posy = 4;
+                                        loop {
+                                            if self.enemies[posy][x].0 != Enemy::None {
+                                                self.last_row[posy] = (self.enemies[posy][x].0, x as u8, posy as u8, false);
+                                                break;
+                                            }
+                                            if posy == 0 && self.enemies[posy][x].0 == Enemy::None {
+                                                self.last_row[posy] = (Enemy::None, 0, 0, false);
+                                            }
+                                            if posy > 0 {
+                                                posy -= 1;
+                                            } else {
+                                                break;
+                                            }
+                                        }
                                     } else {
                                         self.enemies[y][x].1 -= 1;
                                     }
@@ -271,19 +315,63 @@ impl <'a> SpaceInvaders<'a> {
 
             // check enemy projectiles collision with player ships
         }
+
         // info!("enemies: {}", self.enemies_count);
         if self.enemies_count == 0 {
             self.level += 1;
             self.init();
         }
 
+        if self.projectile_cooldown == 0 {
+            match self.choose_enemy() as usize {
+                10 => {}
+                t => { 
+                    self.last_row[t].3 = true;
+                    self.projectile_cooldown = 100;
+                }
+            }
+        } else {
+            self.projectile_cooldown -= 1;
+        }
+        info!("active projectiles {}", self.enemy_projectiles.len());
+        for item in self.last_row.iter() {
+            match item.0 {
+                Enemy::Class1 => {
+                    info!("Class1 {}", item.3);
+                } 
+                Enemy::Class2 => {
+                    info!("Class2 {}", item.3);
+                } 
+                Enemy::Class3 => {
+                    info!("Class3 {}", item.3);
+                } 
+                Enemy::None => {
+                    info!("None {}", item.3);
+                }
+                _ =>{}
+            }
+        }
+
+        for i in 0..self.enemy_projectiles.len() {
+            // info!("enemy proj coords {} {}", self.enemy_projectiles[i].0, self.enemy_projectiles[i].1);
+            self.enemy_projectiles[i].1 += 1;
+            if self.enemy_projectiles[i].1 > 160 {
+                self.enemy_projectiles[i].3 = false;
+                self.last_row[self.enemy_projectiles[i].2 as usize].3 = false;
+                // info!("projectile out of scope");
+            }
+        }
+        self.enemy_projectiles.
+            retain(|active| active.3);   
+        
         for projectile in self.player1_projectiles.iter_mut() {
             projectile.1 -= 1;
         }
         self.player1_projectiles
-            .retain(|&(_, y, _)| y >= 60);
-        
-        for projectile in self.player2_projectiles.iter_mut() {
+        .retain(|&(_, y, _)| y >= 60);
+    
+    for projectile in self.player2_projectiles.iter_mut() {
+            // info!("{} {}", projectile.0, projectile.1);
             projectile.1 -= 1;
         }
         self.player2_projectiles
@@ -326,6 +414,24 @@ impl <'a> SpaceInvaders<'a> {
 
     }
 
+    fn choose_enemy(&mut self) -> u8 {
+        let available: Vec<&(Enemy, u8, u8, bool), 5> = self.last_row.iter().filter(|active_projectile| active_projectile.3 == false && active_projectile.0 != Enemy::Class1).collect();
+        info!("AAAAAAAAAAAAAAAa");
+        info!("available enemies {}", available.len());
+        let mut rng = RoscRng;
+        match available.choose(&mut rng) {
+            Some(t) => {
+                unsafe {
+                    self.enemy_projectiles.push(((t.1 + OFFSET_X) * SPACING + 1, (t.2 * SPACING) + OFFSET_Y + ENEMY_HEIGHT as u8, t.1,  true)).unwrap();
+                }
+                t.1
+            },
+            None => {
+                10
+            }
+        }
+    }
+
     async fn draw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
         if self.update_frame() {
             Rectangle::new(Point::new( 0 , 50), Size::new(128, 150))
@@ -359,6 +465,16 @@ impl <'a> SpaceInvaders<'a> {
                 .draw(screen)
                 .unwrap();    
         }
+        for projectile in self.enemy_projectiles.iter() {
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32 - 1), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CYAN))
+                .draw(screen)
+                .unwrap();    
+        }
         Rectangle::new(Point::new(self.player1_pos_prev as i32 , 150 as i32), Size::new(4, 4))
             .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
             .draw(screen)
@@ -388,18 +504,19 @@ impl <'a> SpaceInvaders<'a> {
             }
             Input::Left => if self.player1_pos > 0 { self.player1_pos_prev = self.player1_pos; self.player1_pos -= 1 }
             Input::Right => if self.player1_pos < 128 { self.player1_pos_prev = self.player1_pos; self.player1_pos += 1 }
-            Input::Fire => if self.player1_cooldown == 0 { self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); self.player1_cooldown = 40 }
+            Input::Fire => if self.player1_cooldown == 0 { self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); self.player1_cooldown = 60 }
             
             Input::Left2 => if self.player2_pos > 0 { self.player2_pos_prev = self.player2_pos; self.player2_pos -= 1 }
             Input::Right2 => if self.player2_pos < 128 { self.player2_pos_prev = self.player2_pos; self.player2_pos += 1 }
-            Input::Fire2 => if self.player2_cooldown == 0 { self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); self.player2_cooldown = 40 }
+            Input::Fire2 => if self.player2_cooldown == 0 { self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); self.player2_cooldown = 60 }
             _ => {}
         }
     }
 
     pub async fn game_loop(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
         loop {
-            match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(5))).await {
+            INPUT_SIGNAL.reset();
+            match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(10))).await {
                 Either::First(input) => {
                     self.handle_input(&input);
                 }
