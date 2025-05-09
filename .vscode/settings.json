@@ -1,4 +1,0 @@
-{
-    "rust-analyzer.check.allTargets": false,
-    "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf"
-}
