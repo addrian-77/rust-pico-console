@@ -322,7 +322,7 @@ impl <'a> Snake<'a> {
         // info!("changed tail to {}", self.tail);
     }
 
-    fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+    async fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
         Rectangle::new(Point::new(0, 0), Size::new(128, 160))
             .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
             .draw(screen)
@@ -442,7 +442,7 @@ impl <'a> Snake<'a> {
                             info!("obtained result... somehow?");
                             match result {
                                 MenuOption::Resume | MenuOption::None => {
-                                    self.redraw(screen);
+                                    self.redraw(screen).await;
                                     Timer::after(Duration::from_millis(100)).await;
                                     INPUT_SIGNAL.reset();
                                 },
@@ -461,7 +461,23 @@ impl <'a> Snake<'a> {
                 self.draw(screen);
             } else {
                 info!("game over!");
-                loop {}
+                // create pause menu
+                let mut end_menu: Menu<'_> = Menu::init("Game over!", &[MenuOption::Restart, MenuOption::Exit], screen);
+                let result: MenuOption = end_menu.menu_loop(screen).await;
+                info!("obtained result... somehow?");
+                match result {
+                    MenuOption::Restart | MenuOption::None => {
+                        unsafe { CURRENT = 1 }; 
+                        Timer::after(Duration::from_millis(100)).await;
+                        INPUT_SIGNAL.reset();
+                        return;
+                    },
+                    MenuOption::Exit => {
+                        unsafe { CURRENT = 0 };
+                        return;
+                    }
+                    _ => {}
+                }
             }
         }
     }

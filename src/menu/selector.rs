@@ -63,6 +63,7 @@ impl <'a> Menu<'a> {
                 MenuOption::Sokoban => "Sokoban",
                 MenuOption::Debug => "Debug",
                 MenuOption::Resume => "Resume",
+                MenuOption::Restart => "Restart",
                 MenuOption::Exit => "Exit",
                 _ => ""
             }, Point::new(23, 46 + i as i32 * 16),MonoTextStyle::new(&FONT_6X10, color))

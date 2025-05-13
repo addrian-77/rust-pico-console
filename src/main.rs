@@ -152,7 +152,7 @@ async fn main(spawner: Spawner) {
                     snake.game_loop(&mut screen).await;
                 },
                 2 => {
-                    let mut enemies = Vec::<Vec::<(Enemy, u8), 5>, 4>::from_iter(
+                    let mut enemies = Vec::<Vec::<(Enemy, u8), 5>, 5>::from_iter(
                         [
                             Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
                             Vec::from_iter([(Enemy::None, 0); 5].iter().cloned()),
@@ -235,12 +235,14 @@ async fn receive(socket: UdpSocket<'static>) {
                         "a" => Input::Left,
                         "s" => Input::Down,
                         "d" => Input::Right,
-                        "f" => Input::Fire,
+                        "f" => Input::Right_Shoot,
+                        "g" => Input::Left_Shoot,
                         "u" => Input::Up2,
                         "h" => Input::Left2,
                         "j" => Input::Down2,
                         "k" => Input::Right2,
-                        "g" => Input::Fire2,
+                        "o" => Input::Right2_Shoot,
+                        "p" => Input::Left2_Shoot,
                         "e" => Input::Select,
                         "q" => Input::Back,
                         _ => Input::Ignore,

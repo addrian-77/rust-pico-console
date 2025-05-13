@@ -25,13 +25,13 @@ use heapless::{
 
 use rand::seq::SliceRandom;
 
-use crate::INPUT_SIGNAL;
+use crate::{menu::selector::Menu, INPUT_SIGNAL};
 use crate::CURRENT;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
-use rust_pico_console::Input;
+use rust_pico_console::{Input, MenuOption};
 
 static mut OFFSET_X: u8 = 0;
 static mut OFFSET_Y: u8 = 50;
@@ -64,7 +64,7 @@ pub struct SpaceInvaders<'a> {
     player2_projectiles: &'a mut Vec<(u8, u8, bool), 20>,
     player1_lives: u8,
     player2_lives: u8,
-    enemies: &'a mut Vec<Vec<(Enemy, u8),5>,4>,
+    enemies: &'a mut Vec<Vec<(Enemy, u8),5>,5>,
     last_row: &'a mut Vec<(Enemy, u8, u8, bool), 5>,
     enemy_projectiles: &'a mut Vec<(u8, u8, u8, bool), 5>,
     projectile_cooldown: u8,
@@ -77,7 +77,7 @@ pub struct SpaceInvaders<'a> {
 }
 
 impl <'a> SpaceInvaders<'a> {
-    pub fn new(enemies: &'a mut Vec<Vec<(Enemy, u8), 5>, 4> , 
+    pub fn new(enemies: &'a mut Vec<Vec<(Enemy, u8), 5>, 5> , 
     last_row: &'a mut Vec<(Enemy, u8, u8, bool), 5>,
     enemy_projectiles: &'a mut Vec<(u8, u8, u8, bool), 5>,
     player1_projectiles: &'a mut Vec<(u8, u8, bool), 20>,
@@ -333,24 +333,24 @@ impl <'a> SpaceInvaders<'a> {
         } else {
             self.projectile_cooldown -= 1;
         }
-        info!("active projectiles {}", self.enemy_projectiles.len());
-        for item in self.last_row.iter() {
-            match item.0 {
-                Enemy::Class1 => {
-                    info!("Class1 {}", item.3);
-                } 
-                Enemy::Class2 => {
-                    info!("Class2 {}", item.3);
-                } 
-                Enemy::Class3 => {
-                    info!("Class3 {}", item.3);
-                } 
-                Enemy::None => {
-                    info!("None {}", item.3);
-                }
-                _ =>{}
-            }
-        }
+        // info!("active projectiles {}", self.enemy_projectiles.len());
+        // for item in self.last_row.iter() {
+        //     match item.0 {
+        //         Enemy::Class1 => {
+        //             info!("Class1 {}", item.3);
+        //         } 
+        //         Enemy::Class2 => {
+        //             info!("Class2 {}", item.3);
+        //         } 
+        //         Enemy::Class3 => {
+        //             info!("Class3 {}", item.3);
+        //         } 
+        //         Enemy::None => {
+        //             info!("None {}", item.3);
+        //         }
+        //         _ =>{}
+        //     }
+        // }
 
         for i in 0..self.enemy_projectiles.len() {
             // info!("enemy proj coords {} {}", self.enemy_projectiles[i].0, self.enemy_projectiles[i].1);
@@ -416,8 +416,8 @@ impl <'a> SpaceInvaders<'a> {
 
     fn choose_enemy(&mut self) -> u8 {
         let available: Vec<&(Enemy, u8, u8, bool), 5> = self.last_row.iter().filter(|active_projectile| active_projectile.3 == false && active_projectile.0 != Enemy::Class1).collect();
-        info!("AAAAAAAAAAAAAAAa");
-        info!("available enemies {}", available.len());
+        // info!("AAAAAAAAAAAAAAAa");
+        // info!("available enemies {}", available.len());
         let mut rng = RoscRng;
         match available.choose(&mut rng) {
             Some(t) => {
@@ -494,22 +494,101 @@ impl <'a> SpaceInvaders<'a> {
         
     }
     
-    fn handle_input(&mut self, input: &Input) {
+    fn handle_input(&mut self, input: &Input) -> bool {
         match input {
             Input::Select => {
-                
+                return true
             }
             Input::Back => {
-                
+                return false
             }
-            Input::Left => if self.player1_pos > 0 { self.player1_pos_prev = self.player1_pos; self.player1_pos -= 1 }
-            Input::Right => if self.player1_pos < 128 { self.player1_pos_prev = self.player1_pos; self.player1_pos += 1 }
-            Input::Fire => if self.player1_cooldown == 0 { self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); self.player1_cooldown = 60 }
-            
-            Input::Left2 => if self.player2_pos > 0 { self.player2_pos_prev = self.player2_pos; self.player2_pos -= 1 }
-            Input::Right2 => if self.player2_pos < 128 { self.player2_pos_prev = self.player2_pos; self.player2_pos += 1 }
-            Input::Fire2 => if self.player2_cooldown == 0 { self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); self.player2_cooldown = 60 }
-            _ => {}
+            Input::Left => { 
+                if self.player1_pos > 0 { 
+                    self.player1_pos_prev = self.player1_pos; 
+                    self.player1_pos -= 1; 
+                } 
+                return true
+            }
+            Input::Right => { 
+                if self.player1_pos < 128 { 
+                    self.player1_pos_prev = self.player1_pos; 
+                    self.player1_pos += 1 
+                }
+                return true
+            }
+            Input::Up => {
+                if self.player1_cooldown == 0 { 
+                    self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); 
+                    self.player1_cooldown = 60; 
+                }
+                return true
+            }
+            Input::Right_Shoot => {
+                if self.player1_cooldown == 0 { 
+                    self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); 
+                    self.player1_cooldown = 60; 
+                }
+                if self.player1_pos < 128 { 
+                    self.player1_pos_prev = self.player1_pos; 
+                    self.player1_pos += 1 
+                }
+                return true;
+            }
+            Input::Left_Shoot => {
+                if self.player1_cooldown == 0 { 
+                    self.player1_projectiles.push((self.player1_pos + 1, 146, true)).unwrap(); 
+                    self.player1_cooldown = 60; 
+                }
+                if self.player1_pos > 0 { 
+                    self.player1_pos_prev = self.player1_pos; 
+                    self.player1_pos -= 1; 
+                }
+                return true;
+            }
+            Input::Left2 => { 
+                if self.player2_pos > 0 { 
+                    self.player2_pos_prev = self.player2_pos; 
+                    self.player2_pos -= 1 
+                }
+                return true
+            }
+            Input::Right2 => {
+                if self.player2_pos < 128 { 
+                    self.player2_pos_prev = self.player2_pos; 
+                    self.player2_pos += 1 
+                }
+                return true
+            }
+            Input::Up2 => { 
+                if self.player2_cooldown == 0 { 
+                    self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); 
+                    self.player2_cooldown = 60 
+                }
+                return true
+            }
+            Input::Right2_Shoot => {
+                if self.player2_cooldown == 0 { 
+                    self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); 
+                    self.player2_cooldown = 60 
+                }
+                if self.player2_pos < 128 { 
+                    self.player2_pos_prev = self.player2_pos; 
+                    self.player2_pos += 1 
+                }
+                return true;
+            }
+            Input::Left2_Shoot => {
+                if self.player2_cooldown == 0 { 
+                    self.player2_projectiles.push((self.player2_pos + 1, 146, true)).unwrap(); 
+                    self.player2_cooldown = 60 
+                }
+                if self.player2_pos > 0 { 
+                    self.player2_pos_prev = self.player2_pos; 
+                    self.player2_pos -= 1 
+                }
+                return true;
+            }
+            _ => { return true }
         }
     }
 
@@ -518,14 +597,90 @@ impl <'a> SpaceInvaders<'a> {
             INPUT_SIGNAL.reset();
             match select(INPUT_SIGNAL.wait(), Timer::after(Duration::from_millis(10))).await {
                 Either::First(input) => {
-                    self.handle_input(&input);
+                    if self.handle_input(&input) == false {
+                        // create pause menu
+                        let mut pause_menu: Menu<'_> = Menu::init("Pause menu", &[MenuOption::Resume, MenuOption::Exit], screen);
+                        let result: MenuOption = pause_menu.menu_loop(screen).await;
+                        info!("obtained result... somehow?");
+                        match result {
+                            MenuOption::Resume | MenuOption::None => {
+                                self.redraw(screen).await;
+                                Timer::after(Duration::from_millis(100)).await;
+                                INPUT_SIGNAL.reset();
+                            },
+                            MenuOption::Exit => {
+                                unsafe { CURRENT = 0 };
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 _ => {}
             }
             self.draw(screen).await;
         }
     }
+
+    async fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        Rectangle::new(Point::new( 0 , 0), Size::new(128, 160))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        for i in 0..4 as u8 {
+            for j in 0..5 as u8 {
+                // info!("i j {} {}",i ,j);
+                draw_enemy(j, i, &self.enemies[i as usize][j as usize].0, screen);
+            }
+        }
+        for projectile in self.player1_projectiles.iter() {
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32 + 1), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::WHITE))
+                .draw(screen)
+                .unwrap();    
+        }
+        for projectile in self.player2_projectiles.iter() {
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32 + 1), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                .draw(screen)
+                .unwrap();    
+        }
+        for projectile in self.enemy_projectiles.iter() {
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32 - 1), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(projectile.0 as i32, projectile.1 as i32), Size::new(2, 4))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CYAN))
+                .draw(screen)
+                .unwrap();    
+        }
+        Rectangle::new(Point::new(self.player1_pos_prev as i32 , 150 as i32), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        Rectangle::new(Point::new(self.player1_pos as i32 , 150 as i32), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+            .draw(screen)
+            .unwrap();
+        Rectangle::new(Point::new(self.player2_pos_prev as i32 , 150 as i32), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        Rectangle::new(Point::new(self.player2_pos as i32 , 150 as i32), Size::new(4, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+            .draw(screen)
+            .unwrap();
         
+    }       
 }
 
 fn draw_enemy(posx: u8, posy: u8, enemy: &Enemy, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {

@@ -4,10 +4,8 @@ use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
 
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_rp::{
-    clocks::RoscRng, gpio::Output, pac::pwm::regs::En, spi::Spi
+    gpio::Output, spi::Spi
 };
-
-use embassy_usb::descriptor::descriptor_type::ENDPOINT;
 use mipidsi::interface::SpiInterface;  
 use mipidsi::models::ST7735s;
 
@@ -16,22 +14,17 @@ use embedded_graphics::{
         PrimitiveStyle, Rectangle
     }, text::Text
 };
-use embassy_futures::select::{select, Either};
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Timer};
 
-use heapless::{
-    Vec, spsc::Queue,
-};
+use heapless::Vec;
 
-use rand::seq::SliceRandom;
-
-use crate::INPUT_SIGNAL;
+use crate::{menu::selector::Menu, INPUT_SIGNAL};
 use crate::CURRENT;
 
 use {defmt_rtt as _, panic_probe as _};
 use defmt::*;
 
-use rust_pico_console::Input;
+use rust_pico_console::{Input, MenuOption};
 
 static mut OFFSET_X: i32 = 32;
 
@@ -117,52 +110,60 @@ impl <'a> Sokoban<'a> {
         }
     }
     
-    fn handle_input(&mut self, input: &Input, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+    fn handle_input(&mut self, input: &Input, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) -> bool {
         match input {
             Input::Select => {
-                
+                return true;
             }
             Input::Back => {
-                
+                return false;
             }
             Input::Up => {
                 self.move_player(1, -1, 0, screen);
+                return true;
             }
             Input::Down => {
                 self.move_player(1, 1, 0, screen);
+                return true;
             }
             Input::Left => {
                 self.move_player(1, 0, -1, screen);
+                return true;
             }
             Input::Right => {
                 self.move_player(1, 0, 1, screen);
+                return true;
             } 
             Input::Up2 => {
                 self.move_player(2, -1, 0, screen);
+                return true;
             }
             Input::Down2 => {
                 self.move_player(2, 1, 0, screen);
+                return true;
             }
             Input::Left2 => {
                 self.move_player(2, 0, -1, screen);
+                return true;
             } 
             Input::Right2 => {
                 self.move_player(2, 0, 1, screen);
+                return true;
             }
-            _ => {}
+            _ => { return true }
         }
     }
     
     fn move_player(&mut self, p: u8, x: i8, y: i8, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        let (player, color, other) = match p {
+        let (player, other) = match p {
             1 => {
-                (&mut self.player1, Rgb565::BLUE, self.player2)
+                (&mut self.player1, self.player2)
             }
             2 => {
-                (&mut self.player2, Rgb565::CSS_ORANGE, self.player1)  
+                (&mut self.player2, self.player1)  
             }
             _ => {
-                (&mut self.player1, Rgb565::BLUE, self.player2)
+                (&mut self.player1, self.player2)
             }
         };
 
@@ -175,10 +176,6 @@ impl <'a> Sokoban<'a> {
                 self.frame[player.0 as usize][player.1 as usize] = 0;
                 player.0 += x as u8;
                 player.1 += y as u8;
-                Rectangle::new(Point::new(player.1 as i32 * 9, player.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                    .into_styled(PrimitiveStyle::with_fill(color))
-                    .draw(screen)
-                    .unwrap();
             } else if self.frame[(player.0 as i8 + x) as usize][(player.1 as i8 + y) as usize] == 2 && self.frame[(player.0 as i8 + 2 * x) as usize][(player.1 as i8 + 2 * y) as usize] == 0 {
                 self.frame[player.0 as usize][player.1 as usize] = 0;
                 self.frame[(player.0 as i8 + 2 * x) as usize][(player.1 as i8 + 2 * y) as usize] = 2;
@@ -188,10 +185,6 @@ impl <'a> Sokoban<'a> {
                     .unwrap();
                 player.0 += x as u8;
                 player.1 += y as u8;
-                Rectangle::new(Point::new(player.1 as i32 * 9, player.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                    .into_styled(PrimitiveStyle::with_fill(color))
-                    .draw(screen)
-                    .unwrap();
                 Rectangle::new(Point::new((player.1 as i32 + y as i32) * 9, (player.0 as i32 + x as i32) * 9 + OFFSET_X), Size::new(8, 8))
                     .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_BROWN))
                     .draw(screen)
@@ -225,10 +218,70 @@ impl <'a> Sokoban<'a> {
         self.draw_init(screen).await;
         loop {
             let input = INPUT_SIGNAL.wait().await;
-            self.handle_input(&input, screen);
+            if self.handle_input(&input, screen) == false {
+                // create pause menu
+                let mut pause_menu: Menu<'_> = Menu::init("Pause menu", &[MenuOption::Resume, MenuOption::Exit], screen);
+                let result: MenuOption = pause_menu.menu_loop(screen).await;
+                info!("obtained result... somehow?");
+                match result {
+                    MenuOption::Resume | MenuOption::None => {
+                        self.redraw(screen).await;
+                        Timer::after(Duration::from_millis(100)).await;
+                        INPUT_SIGNAL.reset();
+                    },
+                    MenuOption::Exit => {
+                        unsafe { CURRENT = 0 };
+                        return;
+                    }
+                    _ => {}
+                }
+            }
             Timer::after(Duration::from_millis(100)).await;
             INPUT_SIGNAL.reset();
         }
     }
-        
+
+    async fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        Rectangle::new(Point::new(0, 0), Size::new(128, 160))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        unsafe {
+            for destination in self.destinations.iter() {
+                Rectangle::new(Point::new(destination.1 as i32 * 9, destination.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
+                    .draw(screen)
+                    .unwrap();
+            }
+            Rectangle::new(Point::new(self.player1.1 as i32 * 9, self.player1.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+                .draw(screen)
+                .unwrap();
+            Rectangle::new(Point::new(self.player2.1 as i32 * 9, self.player2.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+                .draw(screen)
+                .unwrap();
+            for i in 0..14 {
+                for j in 0..14 {
+                    match self.frame[i][j] {
+                        1 => {
+                            // wall, yellow
+                            Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                                .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                                .draw(screen)
+                                .unwrap();
+                        }
+                        2 => {
+                            // box, brown
+                            Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_BROWN))
+                                .draw(screen)
+                                .unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
 }
