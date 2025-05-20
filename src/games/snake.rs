@@ -90,11 +90,11 @@ impl <'a> Snake<'a> {
             body_1,
             body_2,
             apples,
-            apples_count: 1,
+            apples_count: 0,
         }
     }
     pub fn init(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        info!("frame: {:?}", self.frame);
+        // info!("frame: {:?}", self.frame);
         self.frame[3] = setval(self.frame[3], 3, true);
         self.frame[3] = setval(self.frame[3], 4, true);
         self.frame[3] = setval(self.frame[3], 5, true);
@@ -128,21 +128,27 @@ impl <'a> Snake<'a> {
     }
 
     fn update_frame(&mut self) -> bool {
-        match self.facing_1 {
-            0 => self.head_1.1 = if self.head_1.1 > 0 { self.head_1.1 - 1 } else { 23 },
-            1 => self.head_1.1 = if self.head_1.1 < 23 { self.head_1.1 + 1 } else { 0 },
-            2 => self.head_1.0 = if self.head_1.0 > 0 { self.head_1.0 - 1 } else { 23 },
-            3 => self.head_1.0 = if self.head_1.0 < 23 { self.head_1.0 + 1 } else { 0 },
-            _ =>(),
+        if self.active_1 {
+            match self.facing_1 {
+                0 => self.head_1.1 = if self.head_1.1 > 0 { self.head_1.1 - 1 } else { 23 },
+                1 => self.head_1.1 = if self.head_1.1 < 23 { self.head_1.1 + 1 } else { 0 },
+                2 => self.head_1.0 = if self.head_1.0 > 0 { self.head_1.0 - 1 } else { 23 },
+                3 => self.head_1.0 = if self.head_1.0 < 23 { self.head_1.0 + 1 } else { 0 },
+                _ =>(),
+            }
         }
 
-        match self.facing_2 {
-            0 => self.head_2.1 = if self.head_2.1 > 0 { self.head_2.1 - 1 } else { 23 },
-            1 => self.head_2.1 = if self.head_2.1 < 23 { self.head_2.1 + 1 } else { 0 },
-            2 => self.head_2.0 = if self.head_2.0 > 0 { self.head_2.0 - 1 } else { 23 },
-            3 => self.head_2.0 = if self.head_2.0 < 23 { self.head_2.0 + 1 } else { 0 },
-            _ =>(),
+        if self.active_2 {
+            match self.facing_2 {
+                0 => self.head_2.1 = if self.head_2.1 > 0 { self.head_2.1 - 1 } else { 23 },
+                1 => self.head_2.1 = if self.head_2.1 < 23 { self.head_2.1 + 1 } else { 0 },
+                2 => self.head_2.0 = if self.head_2.0 > 0 { self.head_2.0 - 1 } else { 23 },
+                3 => self.head_2.0 = if self.head_2.0 < 23 { self.head_2.0 + 1 } else { 0 },
+                _ =>(),
+            }
         }
+        // info!("reached part 1");
+        // info!("updated 1 {}, updated 2 {}", self.updated_1, self.updated_2);
 
         // info!("changed head {}", self.head);
         // for (i, value) in self.frame.iter().enumerate() {
@@ -151,96 +157,132 @@ impl <'a> Snake<'a> {
         // for value in self.body_1.iter() {
         //     info!("part {}, {}", value.0, value.1);
         // }
-        if self.head_1 != self.apple {
-            if checkval(self.apples[self.head_1.1 as usize], self.head_1.0) {
-                self.apples_count -= 1;
-            } else {
-                match self.body_1.back() {
-                    Some(t) => self.tail_1 = *t,
-                    None => (),
+        if self.active_1 {
+            // info!("entered if");
+            if self.head_1 != self.apple {
+                if checkval(self.frame[self.head_1.1 as usize], self.head_1.0) == true {
+                    info!("collision detected, caused by 1st player at {}. {}", self.head_1.0, self.head_1.1);
+                    self.active_1 = false;
+                    self.updated_1 = false;
+                    for value in self.body_1.iter() {
+                        // info!("body value {}", value);
+                        self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
+                        self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
+                        self.apples_count += 1;
+                    }
+                    // info!("apples");
+                    // for (i, value) in self.apples.iter().enumerate() {
+                    //     info!("index {} {:#034b}", i, value);
+                    // }
+                    // info!("frame");
+                    // for (i, value) in self.frame.iter().enumerate() {
+                    //     info!("index {} {:#034b}", i, value);
+                    // }
+                    // return false;
+                } else if checkval(self.apples[self.head_1.1 as usize], self.head_1.0) {
+                    self.apples[self.head_1.1 as usize] = setval(self.apples[self.head_1.1 as usize], self.head_1.0, false);
+                    self.apples_count -= 1;
+                } else {
+                    match self.body_1.back() {
+                        Some(t) => self.tail_1 = *t,
+                        None => (),
+                    }
+                    self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
+                    self.body_1.pop_back();
                 }
-                self.frame[self.tail_1.1 as usize] = setval(self.frame[self.tail_1.1 as usize], self.tail_1.0, false);
-                self.body_1.pop_back();
+            } else {
+                self.generate_apple();
             }
-        } else if self.apples_count == 0 {
-            self.generate_apple();
+
+            match self.body_1.front() {
+                Some(t) => self.second_1 = *t,
+                None => (),
+            }
+            self.frame[self.head_1.1 as usize] = setval(self.frame[self.head_1.1 as usize], self.head_1.0, true);
+            self.body_1.push_front(self.head_1).unwrap();
         }
         // for (i, value) in self.apples.iter().enumerate() {
         //     info!("index {} {:#034b}", i, value);
         // }
+        // info!("frame");
+        // for (i, value) in self.frame.iter().enumerate() {
+        //     info!("index {} {:#034b}", i, value);
+        // }
 
-        if checkval(self.frame[self.head_1.1 as usize], self.head_1.0) == true {
-            info!("collision detected, caused by 1st player at {}. {}", self.head_1.0, self.head_1.1);
-            self.active_1 = false;
-            for value in self.body_1.iter() {
-                self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
-                self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
-                self.apples_count += 1;
-            }
-            return self.active_1 || self.active_2;
-        }
         
-        if self.head_2 != self.apple {
-            if checkval(self.apples[self.head_2.1 as usize], self.head_2.0) {
-                self.apples_count -= 1;
-            } else {
-                match self.body_2.back() {
-                    Some(t) => self.tail_2 = *t,
-                    None => (),
+        if self.active_2 {
+            // info!("entered active 2 if");
+            if self.head_2 != self.apple {
+                if checkval(self.frame[self.head_2.1 as usize], self.head_2.0) == true {
+                    info!("collision detected, caused by 2nd player at {}, {}", self.head_2.0, self.head_2.1);
+                    self.active_2 = false;
+                    self.updated_2 = false;
+                    for value in self.body_2.iter() {
+                        // info!("body value {}", value);
+                        self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
+                        self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
+                        self.apples_count += 1;
+                    }
+                    
+                    // info!("apples");
+                    // for (i, value) in self.apples.iter().enumerate() {
+                    //     info!("index {} {:#034b}", i, value);
+                    // }
+                    // info!("frame");
+                    // for (i, value) in self.frame.iter().enumerate() {
+                    //     info!("index {} {:#034b}", i, value);
+                    // }
+                    // return false;
+                } else if checkval(self.apples[self.head_2.1 as usize], self.head_2.0) {
+                    self.apples[self.head_2.1 as usize] = setval(self.apples[self.head_2.1 as usize], self.head_2.0, false);
+                    self.apples_count -= 1;
+                } else {
+                    match self.body_2.back() {
+                        Some(t) => self.tail_2 = *t,
+                        None => (),
+                    }
+                    self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
+                    self.body_2.pop_back();
                 }
-                self.frame[self.tail_2.1 as usize] = setval(self.frame[self.tail_2.1 as usize], self.tail_2.0, false);
-                self.body_2.pop_back();
+            } else {
+                self.generate_apple();
             }
-        } else {
-            self.generate_apple();
+            match self.body_2.front() {
+                Some(t) => self.second_2 = *t,
+                None => (),
+            }
+            self.frame[self.head_2.1 as usize] = setval(self.frame[self.head_2.1 as usize], self.head_2.0, true);
+            self.body_2.push_front(self.head_2).unwrap();
         }
-        
 
-        if checkval(self.frame[self.head_2.1 as usize], self.head_2.0) == true {
-            info!("collision detected, caused by 2nd player at {}, {}", self.head_2.0, self.head_2.1);
-            self.active_2 = false;
-            for value in self.body_2.iter() {
-                self.apples[value.1 as usize] = setval(self.apples[value.1 as usize], value.0, true);
-                self.frame[value.1 as usize] = setval(self.frame[value.1 as usize], value.0, false);
-                self.apples_count += 1;
-            }
-            return self.active_1 || self.active_2;
-        }
+        // info!("frame");
+        // for (i, value) in self.frame.iter().enumerate() {
+        //     info!("index {} {:#034b}", i, value);
+        // }
+        // loop{}
         // apple logic?
         // if apple => don't remove tail
-        match self.body_1.front() {
-            Some(t) => self.second_1 = *t,
-            None => (),
-        }
 
-        match self.body_2.front() {
-            Some(t) => self.second_2 = *t,
-            None => (),
-        }
+
         
-        
-        self.frame[self.head_1.1 as usize] = setval(self.frame[self.head_1.1 as usize], self.head_1.0, true);
-        self.body_1.push_front(self.head_1).unwrap();
         // info!("head_1 value {}", self.head_1);
         // info!("changed frame (head_1 added) to {:#034b} at index {}", self.frame[self.head_1.1 as usize], self.head_1.0);
         // info!("tail_1 value {}", self.tail_1);
         // info!("changed frame (tail_1 removed) from {:#034b} at index {}", self.frame[self.tail_1.1 as usize], self.tail_1.0);
 
-        self.frame[self.head_2.1 as usize] = setval(self.frame[self.head_2.1 as usize], self.head_2.0, true);
-        self.body_2.push_front(self.head_2).unwrap();
         // info!("head_2 value{}", self.head_2);
         // info!("changed frame (head_2 added) to {:#034b} at index {}", self.frame[self.head_2.1 as usize], self.head_2.0);
         // info!("tail_2 value {}", self.tail_2);
         // info!("changed frame (tail_2 removed) from {:#034b} at index {}", self.frame[self.tail_2.1 as usize], self.tail_2.0);
         // info!("deque len {}" , self.body.len());
-        return true;
+        return self.active_1 || self.active_2;
     }
     
     fn generate_apple(&mut self) {
         let mut empty_spaces: Vec<(u8, u8), 576> = Vec::new();
         for i in 0..23 as u8 {
             for j in 0..23 as u8 {
-                if checkval(self.frame[i as usize], j) == false {
+                if checkval(self.frame[i as usize], j) == false && checkval(self.frame[i as usize], j) == false{
                     empty_spaces.push((i, j)).unwrap();
                 }
             }
@@ -253,11 +295,11 @@ impl <'a> Snake<'a> {
     }
 
     fn draw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        if self.active_1 && self.active_2 == false {
+        if self.active_1 == false || self.active_2 == false {
             for (index, value) in self.apples.iter().enumerate() {
                 for j in 0..31 {
                     if checkval(*value, j) {
-                        Rectangle::new(Point::new((index as u8 + OFFSET_X) as i32 * 5, (j + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                        Rectangle::new(Point::new((j + OFFSET_X) as i32 * 5, (index as u8 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
                             .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
                             .draw(screen)
                             .unwrap();
@@ -342,7 +384,7 @@ impl <'a> Snake<'a> {
             for (index, value) in self.apples.iter().enumerate() {
                 for j in 0..31 {
                     if checkval(*value, j) {
-                        Rectangle::new(Point::new((index as u8 + OFFSET_X) as i32 * 5, (j + OFFSET_Y) as i32 * 5), Size::new(4, 4))
+                        Rectangle::new(Point::new((j + OFFSET_X) as i32 * 5, (index as u8 + OFFSET_Y) as i32 * 5), Size::new(4, 4))
                             .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
                             .draw(screen)
                             .unwrap();

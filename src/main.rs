@@ -2,8 +2,7 @@
 #![no_main]
 
 use core::{
-    str::from_utf8,
-    cell::RefCell,
+    cell::{ RefCell, Cell} , net::Ipv4Addr, str::from_utf8
 };
 
 use cyw43_pio::{
@@ -14,7 +13,7 @@ use cyw43_pio::{
 use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
 
 use embassy_executor::{self, Spawner};
-use embassy_net::udp::UdpSocket;
+use embassy_net::{udp::UdpSocket, IpAddress, IpEndpoint};
 use embassy_sync::{blocking_mutex::{raw::{CriticalSectionRawMutex, NoopRawMutex}, Mutex}, signal::Signal};
 use embassy_time::{Delay, Duration, Timer};
 use embassy_rp::{
@@ -59,8 +58,10 @@ use heapless::{Vec, Deque, spsc::Queue};
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
 
-static mut CURRENT: i8 = 0;
+static mut LAST_SELECTED: u8 = 1;
+static mut CURRENT: u8 = 0;
 static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
+static mut LAST_REMOTE: Option<IpEndpoint> = None;
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("main!");
@@ -214,7 +215,19 @@ async fn main(spawner: Spawner) {
                         .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_FLORAL_WHITE))
                         .draw(&mut screen)
                         .unwrap();  
-                    loop{}
+                    loop {
+                        match INPUT_SIGNAL.wait().await {
+                            input => {
+                                match input {
+                                    Input::Back => {
+                                        CURRENT = 0;
+                                        break;
+                                    }
+                                    _ => {}
+                                }    
+                            }
+                        }
+                    }
                 }
                 _ => continue,
             }
@@ -228,7 +241,7 @@ async fn receive(socket: UdpSocket<'static>) {
     let mut buf: [u8; 1500] = [0; 1500];
     loop {
         match socket.recv_from(&mut buf).await {
-            Ok((len, _meta)) => match from_utf8(&buf[..len]) {
+            Ok((len, meta)) => match from_utf8(&buf[..len]) {
                 Ok(s) => {
                     let input: Input = match s {
                         "w" => Input::Up,
@@ -249,6 +262,17 @@ async fn receive(socket: UdpSocket<'static>) {
                     };
                     if input != Input::Ignore {
                         INPUT_SIGNAL.signal(input);
+                    }
+                    unsafe {
+                        if LAST_SELECTED != CURRENT {
+                            LAST_REMOTE = Some(meta.endpoint);
+                            if let Some(mut remote) = LAST_REMOTE {
+                                info!("sending {}", CURRENT);
+                                remote.port = 7881;
+                                socket.send_to(&CURRENT.to_be_bytes(), remote).await.unwrap();
+                            }
+                            LAST_SELECTED = CURRENT;
+                        }   
                     }
                 }
                 Err(_e) => warn!("received {} bytes from", len),
