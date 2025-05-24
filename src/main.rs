@@ -43,8 +43,9 @@ use menu::selector::Menu;
 mod games;
 use games::{
     snake::Snake, 
-    spaceinvaders:: {SpaceInvaders, Enemy}, 
-    sokoban:: Sokoban
+    spaceinvaders::{SpaceInvaders, Enemy}, 
+    sokoban:: Sokoban,
+    breakout::{Breakout, Block}
 };
 
 mod irqs;
@@ -58,7 +59,7 @@ use heapless::{Vec, Deque, spsc::Queue};
 // yellow 1 orange 2 red 29 black 38
 // blue black purple
 
-static mut LAST_SELECTED: u8 = 1;
+static mut LAST_SELECTED: u8 = 100;
 static mut CURRENT: u8 = 0;
 static INPUT_SIGNAL: Signal<CriticalSectionRawMutex, Input> = Signal::new();
 static mut LAST_REMOTE: Option<IpEndpoint> = None;
@@ -91,7 +92,7 @@ async fn main(spawner: Spawner) {
     let di = SpiInterface::new(&mut display_spi, screen_dc, &mut buffer);
     let mut screen  = mipidsi::Builder::new(ST7735s, di)
         .reset_pin(screen_rst)
-        .orientation(Orientation::new())
+        .orientation(Orientation::default().rotate(Rotation::Deg180))
         .init(&mut Delay)
         .unwrap();
     
@@ -132,13 +133,14 @@ async fn main(spawner: Spawner) {
         unsafe {
             match CURRENT {
                 0 => {
-                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &[MenuOption::Snake, MenuOption::SpaceInvaders, MenuOption::Sokoban, MenuOption::Debug], &mut screen);
+                    let mut main_menu: Menu<'_> = Menu::init("Main menu", &[MenuOption::Snake, MenuOption::SpaceInvaders, MenuOption::Sokoban, MenuOption::Breakout, MenuOption::Debug], &mut screen);
                     let result: MenuOption = main_menu.menu_loop(&mut screen).await;
                     match result {
                         MenuOption::None => CURRENT = 0,
                         MenuOption::Snake => CURRENT = 1,
                         MenuOption::SpaceInvaders => CURRENT = 2,
                         MenuOption::Sokoban => CURRENT = 3,
+                        MenuOption::Breakout => CURRENT = 4,
                         MenuOption::Debug => CURRENT = 10,
                         _ => {}
                     }
@@ -198,6 +200,55 @@ async fn main(spawner: Spawner) {
                     sokoban.init();
                     sokoban.game_loop(&mut screen).await;
                 }
+                4 => {
+                    let mut bricks = Vec::<Vec::<Block, 16>, 36>::from_iter(
+                        [
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                            Vec::from_iter([Block::None; 16].iter().cloned()),
+                        ].iter()
+                        .cloned()
+                    );
+                    let mut walls: Vec<bool, 32> = Vec::from_iter([false; 32].iter().cloned());
+                    let mut balls: Vec<(f32, i16, f32 ,i8, bool), 50> = Vec::<(f32, i16, f32 ,i8, bool), 50>::new();
+                    let mut powerups: Vec<(u8, u8, bool, bool), 20> = Vec::<(u8, u8, bool, bool), 20>::new();
+                    let mut breakout: Breakout = Breakout::new(&mut bricks, &mut walls, &mut balls, &mut powerups);
+                    breakout.init();
+                    breakout.game_loop(&mut screen).await;
+                }
                 // debug, the coordinates are inverted
                 10 => {
                     Rectangle::new(Point::new( 0 , 0), Size::new(10, 10))
@@ -256,6 +307,10 @@ async fn receive(socket: UdpSocket<'static>) {
                         "k" => Input::Right2,
                         "o" => Input::Right2_Shoot,
                         "p" => Input::Left2_Shoot,
+                        "1" => Input::LeftLeft, 
+                        "2" => Input::RightLeft,
+                        "3" => Input::LeftRight,
+                        "4" => Input::RightRight,
                         "e" => Input::Select,
                         "q" => Input::Back,
                         _ => Input::Ignore,
@@ -267,7 +322,7 @@ async fn receive(socket: UdpSocket<'static>) {
                         if LAST_SELECTED != CURRENT {
                             LAST_REMOTE = Some(meta.endpoint);
                             if let Some(mut remote) = LAST_REMOTE {
-                                info!("sending {}", CURRENT);
+                                // info!("sending {}", CURRENT);
                                 remote.port = 7881;
                                 socket.send_to(&CURRENT.to_be_bytes(), remote).await.unwrap();
                             }

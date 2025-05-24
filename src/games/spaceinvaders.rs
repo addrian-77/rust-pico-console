@@ -35,11 +35,11 @@ use rust_pico_console::{Input, MenuOption};
 
 static mut OFFSET_X: u8 = 0;
 static mut OFFSET_Y: u8 = 50;
-static ENEMY_WIDTH: u32 = 5;
-static ENEMY_HEIGHT: u32 = 3;
-static BOSS_WIDTH: u32 = 40;
-static BOSS_HEIGHT: u32 = 10;
-static SPACING: u8 = 15;
+const ENEMY_WIDTH: u32 = 5;
+const ENEMY_HEIGHT: u32 = 3;
+const BOSS_WIDTH: u32 = 40;
+const BOSS_HEIGHT: u32 = 10;
+const SPACING: u8 = 15;
 
 #[derive(Debug)]
 #[derive(Clone)]

@@ -26,7 +26,7 @@ use defmt::*;
 
 use rust_pico_console::{Input, MenuOption};
 
-static mut OFFSET_X: i32 = 32;
+const OFFSET_X: i32 = 32;
 
 
 pub struct Sokoban<'a> {
@@ -71,42 +71,41 @@ impl <'a> Sokoban<'a> {
     }
     
     async fn draw_init(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        unsafe {
-            for destination in self.destinations.iter() {
-                Rectangle::new(Point::new(destination.1 as i32 * 9, destination.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                    .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
-                    .draw(screen)
-                    .unwrap();
-            }
-            Rectangle::new(Point::new(self.player1.1 as i32 * 9, self.player1.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+        for destination in self.destinations.iter() {
+            Rectangle::new(Point::new(destination.1 as i32 * 9, destination.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                .into_styled(PrimitiveStyle::with_fill(Rgb565::RED))
                 .draw(screen)
                 .unwrap();
-            Rectangle::new(Point::new(self.player2.1 as i32 * 9, self.player2.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
-                .draw(screen)
-                .unwrap();
-            for i in 0..14 {
-                for j in 0..14 {
-                    match self.frame[i][j] {
-                        1 => {
-                            // wall, yellow
-                            Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                                .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
-                                .draw(screen)
-                                .unwrap();
-                        }
-                        2 => {
-                            // box, brown
-                            Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
-                                .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_BROWN))
-                                .draw(screen)
-                                .unwrap();
-                        }
-                        _ => {}
+        }
+        Rectangle::new(Point::new(self.player1.1 as i32 * 9, self.player1.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+            .draw(screen)
+            .unwrap();
+        Rectangle::new(Point::new(self.player2.1 as i32 * 9, self.player2.0 as i32 * 9 + OFFSET_X), Size::new(8, 8))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+            .draw(screen)
+            .unwrap();
+        for i in 0..14 {
+            for j in 0..14 {
+                match self.frame[i][j] {
+                    1 => {
+                        // wall, yellow
+                        Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                            .into_styled(PrimitiveStyle::with_fill(Rgb565::YELLOW))
+                            .draw(screen)
+                            .unwrap();
                     }
+                    2 => {
+                        // box, brown
+                        Rectangle::new(Point::new(j as i32 * 9, i as i32 * 9 + OFFSET_X), Size::new(8, 8))
+                            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_BROWN))
+                            .draw(screen)
+                            .unwrap();
+                    }
+                    _ => {}
                 }
             }
+        
         }
     }
     

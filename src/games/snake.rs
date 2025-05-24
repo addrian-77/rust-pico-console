@@ -34,8 +34,8 @@ use rust_pico_console::Input;
 use rust_pico_console::MenuOption;
 use crate::Menu;
 
-static OFFSET_X: u8 = 1;
-static OFFSET_Y: u8 = 7;
+const OFFSET_X: u8 = 1;
+const OFFSET_Y: u8 = 7;
 pub struct Snake<'a> {
     head_1: (u8, u8),
     second_1: (u8, u8),
@@ -134,7 +134,9 @@ impl <'a> Snake<'a> {
                 1 => self.head_1.1 = if self.head_1.1 < 23 { self.head_1.1 + 1 } else { 0 },
                 2 => self.head_1.0 = if self.head_1.0 > 0 { self.head_1.0 - 1 } else { 23 },
                 3 => self.head_1.0 = if self.head_1.0 < 23 { self.head_1.0 + 1 } else { 0 },
-                _ =>(),
+                _ => {
+                    self.head_1.1 = self.head_1.1;    
+                },
             }
         }
 
@@ -144,7 +146,9 @@ impl <'a> Snake<'a> {
                 1 => self.head_2.1 = if self.head_2.1 < 23 { self.head_2.1 + 1 } else { 0 },
                 2 => self.head_2.0 = if self.head_2.0 > 0 { self.head_2.0 - 1 } else { 23 },
                 3 => self.head_2.0 = if self.head_2.0 < 23 { self.head_2.0 + 1 } else { 0 },
-                _ =>(),
+                _ => {
+                    self.head_2.1 = self.head_2.1;
+                },
             }
         }
         // info!("reached part 1");
@@ -282,7 +286,7 @@ impl <'a> Snake<'a> {
         let mut empty_spaces: Vec<(u8, u8), 576> = Vec::new();
         for i in 0..23 as u8 {
             for j in 0..23 as u8 {
-                if checkval(self.frame[i as usize], j) == false && checkval(self.frame[i as usize], j) == false{
+                if checkval(self.frame[i as usize], j) == false && checkval(self.apples[i as usize], j) == false{
                     empty_spaces.push((i, j)).unwrap();
                 }
             }

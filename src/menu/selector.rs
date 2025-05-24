@@ -61,6 +61,7 @@ impl <'a> Menu<'a> {
                 MenuOption::Snake => "Snake",
                 MenuOption::SpaceInvaders => "Space Invaders",
                 MenuOption::Sokoban => "Sokoban",
+                MenuOption::Breakout => "Breakout",
                 MenuOption::Debug => "Debug",
                 MenuOption::Resume => "Resume",
                 MenuOption::Restart => "Restart",

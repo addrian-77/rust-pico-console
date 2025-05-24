@@ -14,6 +14,10 @@ pub enum Input {
     Right2,
     Left2_Shoot,
     Right2_Shoot,
+    LeftLeft,
+    RightLeft,
+    LeftRight,
+    RightRight,
     Select,
     Back,
     Ignore
@@ -25,6 +29,7 @@ pub enum MenuOption {
     Snake,
     SpaceInvaders,
     Sokoban,
+    Breakout,
     Resume, 
     Restart,
     Exit,
