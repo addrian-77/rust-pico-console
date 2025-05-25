@@ -9,7 +9,7 @@ use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7735s;
 
 use embedded_graphics::{
-    mono_font::{ascii::{FONT_10X20, FONT_6X10}, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
+    mono_font::{ascii::{FONT_10X20, FONT_6X10}, jis_x0201::FONT_6X13, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
         PrimitiveStyle, Rectangle
     }, text::Text
 };
@@ -37,7 +37,7 @@ impl <'a> Menu<'a> {
             .unwrap();
         
         // info!("drawing menu");
-        Text::new(title, Point::new(20, 25),MonoTextStyle::new(&FONT_10X20, Rgb565::CSS_ORANGE))
+        Text::new(title, Point::new(20, 25),MonoTextStyle::new(&FONT_10X20, Rgb565::RED))
             .draw(screen)
             .unwrap();
 
@@ -64,6 +64,9 @@ impl <'a> Menu<'a> {
                 MenuOption::Breakout => "Breakout",
                 MenuOption::Debug => "Debug",
                 MenuOption::Resume => "Resume",
+                MenuOption::Continue => "Continue",
+                MenuOption::Next => "Next",
+                MenuOption::Previous => "Previous",
                 MenuOption::Restart => "Restart",
                 MenuOption::Exit => "Exit",
                 _ => ""

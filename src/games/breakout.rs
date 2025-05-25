@@ -56,7 +56,7 @@ pub struct Breakout<'a> {
     bricks_count: u16,
     walls: &'a mut Vec<bool,32>,
     lastwall: i16,
-    balls: &'a mut Vec<(f32, i16, f32 ,i8, bool), 50>, // posx, posy, speedx, speedy, active
+    balls: &'a mut Vec<(f32, i16, f32, i16, bool), 50>, // posx, posy, speedx, speedy, active
     powerups: &'a mut Vec<(u8, u8, bool, bool), 20>,
     player1_started: bool,
     player2_started: bool,
@@ -69,7 +69,7 @@ pub struct Breakout<'a> {
 }
 
 impl <'a> Breakout<'a> {
-    pub fn new(bricks: &'a mut Vec<Vec<Block, 16>, 36>, walls: &'a mut Vec<bool, 32>, balls: &'a mut Vec<(f32, i16, f32, i8, bool), 50>, powerups: &'a mut Vec<(u8, u8, bool, bool), 20>) -> Breakout <'a> {
+    pub fn new(bricks: &'a mut Vec<Vec<Block, 16>, 36>, walls: &'a mut Vec<bool, 32>, balls: &'a mut Vec<(f32, i16, f32, i16, bool), 50>, powerups: &'a mut Vec<(u8, u8, bool, bool), 20>) -> Breakout <'a> {
         Breakout { 
            bricks,
            bricks_count: 0,
@@ -286,7 +286,7 @@ impl <'a> Breakout<'a> {
         }
         self.powerups.retain(|powerup| powerup.3);
         for ball in self.balls.iter_mut() {
-            if ball.1 > 160 {
+            if ball.1 as i16 > 160 {
                 ball.4 = false;
             } else {
                 // info!("ball.3 is {}", ball.3);
@@ -296,7 +296,7 @@ impl <'a> Breakout<'a> {
                     .draw(screen)
                     .unwrap();
                 ball.0 += ball.2;   // x + speedx
-                ball.1 += ball.3 as i16;   // y + speedy
+                ball.1 += ball.3;   // y + speedy
                 Rectangle::new(Point::new( ball.0 as i32 , ball.1 as i32), Size::new(2, 2))
                     .into_styled(PrimitiveStyle::with_fill(Rgb565::WHITE))
                     .draw(screen)
@@ -314,7 +314,7 @@ impl <'a> Breakout<'a> {
                                         ball.3 = -ball.3;
                                         self.bricks[y][x] = Block::None;
                                         self.bricks_count -= 1;
-                                        if rng.gen_bool(0.5) {
+                                        if rng.gen_bool(0.3) {
                                             match self.powerups.push((x as u8 * 8, y as u8 * 4 + OFFSET_Y, rng.gen_bool(0.5), true)) {
                                                 Ok(_) => {}
                                                 Err(_) => {}
@@ -332,7 +332,7 @@ impl <'a> Breakout<'a> {
                                         ball.3 = -ball.3;
                                         self.bricks[y][x] = Block::None;
                                         self.bricks_count -= 1;
-                                        if rng.gen_bool(0.5) {
+                                        if rng.gen_bool(0.3) {
                                             match self.powerups.push((x as u8 * 8, y as u8 * 4 + OFFSET_Y, rng.gen_bool(0.5), true)) {
                                                 Ok(_) => {}
                                                 Err(_) => {}
@@ -348,7 +348,7 @@ impl <'a> Breakout<'a> {
                             }
                         }
                     } 
-                    if ball.1 >= x as i16 * BRICK_HEIGHT + OFFSET_Y as i16 && ball.1 <= (x as i16 + 1) * BRICK_HEIGHT + OFFSET_Y as i16 ||
+                    if ball.1 >= x as i16 * BRICK_HEIGHT + OFFSET_Y as i16 && ball.1  <= (x as i16 + 1) * BRICK_HEIGHT + OFFSET_Y as i16 ||
                     ball.1 + 1 >= x as i16 * BRICK_HEIGHT + OFFSET_Y as i16 && ball.1 + 1 <= (x as i16 + 1 ) * BRICK_HEIGHT + OFFSET_Y as i16 {
                         for y in 0..16 as usize {
                             if ball.0 as i16 == (y as i16 + 1) * BRICK_WIDTH - 1 {
@@ -357,7 +357,7 @@ impl <'a> Breakout<'a> {
                                     ball.2 = -ball.2;
                                     self.bricks[x][y] = Block::None;
                                     self.bricks_count -= 1;
-                                    if rng.gen_bool(0.5) {
+                                    if rng.gen_bool(0.3) {
                                         match self.powerups.push((y as u8 * 8, x as u8 * 4 + OFFSET_Y, rng.gen_bool(0.5), true)) {
                                             Ok(_) => {}
                                             Err(_) => {}
@@ -375,7 +375,7 @@ impl <'a> Breakout<'a> {
                                     ball.2 = -ball.2;
                                     self.bricks[x][y] = Block::None;
                                     self.bricks_count -= 1;
-                                    if rng.gen_bool(0.5) {
+                                    if rng.gen_bool(0.3) {
                                         match self.powerups.push((y as u8 * 8, x as u8 * 4 + OFFSET_Y, rng.gen_bool(0.5), true)) {
                                             Ok(_) => {}
                                             Err(_) => {}
@@ -454,7 +454,7 @@ impl <'a> Breakout<'a> {
             }
         }
         self.balls.retain(|ball| ball.4);
-        info!("bricks {} {}", self.bricks_count, self.bricks_count != 0);
+        // info!("bricks {} {}", self.bricks_count, self.bricks_count != 0);
         self.bricks_count != 0
     }
 
@@ -585,7 +585,6 @@ impl <'a> Breakout<'a> {
             }
             self.player2_pos_prev = 0;
         }
-        
     }
     
     fn handle_input(&mut self, input: &Input) -> bool {
@@ -721,6 +720,22 @@ impl <'a> Breakout<'a> {
                 _ => {}
             }
             if self.update_frame(screen) == false {
+                // create pause menu
+                let mut finished_menu: Menu<'_> = Menu::init("Cleared!", &[MenuOption::Continue, MenuOption::Exit], screen);
+                let result: MenuOption = finished_menu.menu_loop(screen).await;
+                info!("obtained result... somehow?");
+                match result {
+                    MenuOption::Continue | MenuOption::None => {
+                        self.redraw(screen).await;
+                        Timer::after(Duration::from_millis(100)).await;
+                        INPUT_SIGNAL.reset();
+                    },
+                    MenuOption::Exit => {
+                        unsafe { CURRENT = 0 };
+                        return;
+                    }
+                    _ => {}
+                }
                 self.level += 1;
                 self.init();
             }
@@ -729,7 +744,60 @@ impl <'a> Breakout<'a> {
     }
 
     async fn redraw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
-        
-        
+        Rectangle::new(Point::new(0, 0), Size::new(128, 160))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+            .draw(screen)
+            .unwrap();
+        for i in 0..32 {
+            for j in 0..16 {
+                if self.bricks[i][j] != Block::None {
+                    // info!("drawing to {} {}", j * 4, i * 4 + OFFSET_Y as usize);
+                    Rectangle::new(Point::new( (j * 8) as i32 , (OFFSET_Y as usize + (i * 4)) as i32), Size::new(BRICK_WIDTH as u32, BRICK_HEIGHT as  u32))
+                        .into_styled(PrimitiveStyle::with_fill(
+                            match self.bricks[i][j] {
+                                Block::Green => if (j +i) %2 == 0 { Rgb565::GREEN } else { Rgb565::CSS_SEA_GREEN },
+                                Block::Yellow => if (j + i) % 2 == 0 { Rgb565::YELLOW } else { Rgb565::CSS_ORANGE},
+                                Block::Red => if (j + i) % 2 == 0 { Rgb565::RED } else { Rgb565::CSS_DARK_RED },
+                                _ => Rgb565::RED
+                            }
+                        ))
+                        .draw(screen)
+                        .unwrap();
+                }
+            }
+        }
+        Rectangle::new(Point::new(self.player1_pos as i32 , 150 as i32), Size::new(20, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::BLUE))
+            .draw(screen)
+            .unwrap();
+        Rectangle::new(Point::new(self.player2_pos as i32 , 150 as i32), Size::new(20, 4))
+            .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_ORANGE))
+            .draw(screen)
+            .unwrap();
+        self.drawn_init = true;
+        for powerup in self.powerups.iter() {
+            match powerup.2 {
+                true => {
+                    Rectangle::new(Point::new(powerup.0 as i32,  powerup.1 as i32), Size::new(4, 4))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_DARK_ORANGE))
+                        .draw(screen)
+                        .unwrap(); 
+                }
+                false => {
+                    Rectangle::new(Point::new(powerup.0 as i32,  powerup.1 as i32), Size::new(4, 4))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_DARK_CYAN))
+                        .draw(screen)
+                        .unwrap(); 
+                }
+            }
+        }
+        for i in 0..32 {
+            if self.walls[i] == true {
+                Rectangle::new(Point::new( (i * 4) as i32 , 101), Size::new(4, 3))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::CSS_GRAY))
+                    .draw(screen)
+                    .unwrap();
+            }
+        }
     }       
 }

@@ -97,8 +97,7 @@ async fn main(spawner: Spawner) {
         .unwrap();
     
     screen.clear(Rgb565::BLACK).unwrap();
-    let style = MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE);
-    Text::new( "Initializing \nUDP socket", Point::new(20, 20), style)
+    Text::new( "Initializing \nUDP socket", Point::new(20, 20), MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE))
         .draw(&mut screen).unwrap();
 
     let cyw_pwr = Output::new(p.PIN_23, Level::Low);
@@ -243,7 +242,7 @@ async fn main(spawner: Spawner) {
                         .cloned()
                     );
                     let mut walls: Vec<bool, 32> = Vec::from_iter([false; 32].iter().cloned());
-                    let mut balls: Vec<(f32, i16, f32 ,i8, bool), 50> = Vec::<(f32, i16, f32 ,i8, bool), 50>::new();
+                    let mut balls: Vec<(f32, i16, f32 ,i16, bool), 50> = Vec::<(f32, i16, f32 ,i16, bool), 50>::new();
                     let mut powerups: Vec<(u8, u8, bool, bool), 20> = Vec::<(u8, u8, bool, bool), 20>::new();
                     let mut breakout: Breakout = Breakout::new(&mut bricks, &mut walls, &mut balls, &mut powerups);
                     breakout.init();
