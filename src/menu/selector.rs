@@ -9,7 +9,7 @@ use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7735s;
 
 use embedded_graphics::{
-    mono_font::{ascii::{FONT_10X20, FONT_6X10}, jis_x0201::FONT_6X13, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
+    mono_font::{ascii::{FONT_10X20, FONT_6X10, FONT_8X13, FONT_8X13_BOLD}, jis_x0201::FONT_6X13, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
         PrimitiveStyle, Rectangle
     }, text::Text
 };
@@ -37,7 +37,13 @@ impl <'a> Menu<'a> {
             .unwrap();
         
         // info!("drawing menu");
-        Text::new(title, Point::new(20, 25),MonoTextStyle::new(&FONT_10X20, Rgb565::RED))
+        Text::new(title, Point::new(20, 25),MonoTextStyle::new(
+            if title.len() <= 9 {
+                &FONT_10X20
+            } else {
+                &FONT_8X13_BOLD
+            },
+            Rgb565::RED))
             .draw(screen)
             .unwrap();
 
@@ -55,8 +61,13 @@ impl <'a> Menu<'a> {
     }
 
     pub fn draw(&self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        // info!("init screen with selected = {}", self.selected);
         for (i , option) in self.options.iter().enumerate() {
-            let color = if self.selected == i { Rgb565::YELLOW } else { Rgb565::CSS_ORANGE };
+            Rectangle::new(Point::new(19, 36 + i as i32 * 16), Size::new(90, 14))
+                .into_styled(PrimitiveStyle::with_fill(if self.selected == i { Rgb565::WHITE } else { Rgb565::BLUE }))
+                .draw(screen)
+                .unwrap();
+            let color = if self.selected == i { Rgb565::BLUE } else { Rgb565::CSS_ORANGE };
             Text::new(match option {
                 MenuOption::Snake => "Snake",
                 MenuOption::SpaceInvaders => "Space Invaders",
@@ -70,7 +81,7 @@ impl <'a> Menu<'a> {
                 MenuOption::Restart => "Restart",
                 MenuOption::Exit => "Exit",
                 _ => ""
-            }, Point::new(23, 46 + i as i32 * 16),MonoTextStyle::new(&FONT_6X10, color))
+            }, Point::new(23, 45 + i as i32 * 16),MonoTextStyle::new(&FONT_6X10, color))
                 .draw(screen)
                 .unwrap();
         }

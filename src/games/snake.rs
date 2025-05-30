@@ -1,3 +1,5 @@
+use core::fmt;
+
 #[allow(static_mut_refs)]
 
 use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
@@ -11,7 +13,7 @@ use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7735s;
 
 use embedded_graphics::{
-    mono_font::{ascii::{FONT_10X20, FONT_6X10}, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
+    mono_font::{ascii::{FONT_10X20, FONT_6X10}, iso_8859_14::FONT_5X8, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{
         PrimitiveStyle, Rectangle
     }, text::Text
 };
@@ -19,7 +21,7 @@ use embassy_futures::select::{select, Either};
 use embassy_time::{Duration, Timer};
 
 use heapless::{
-    Vec, Deque,
+    Deque, String, Vec
 };
 use rand::seq::SliceRandom;
 
@@ -48,6 +50,7 @@ pub struct Snake<'a> {
     tail_2: (u8, u8),
     facing_2: u8,
     updated_2: bool,
+    score: u64,
     active_2: bool,
     apple: (u8, u8),
     frame: &'a mut Vec::<u32, 32>,
@@ -55,6 +58,7 @@ pub struct Snake<'a> {
     body_2: &'a mut Deque::<(u8, u8), 1025>,
     apples: &'a mut Vec::<u32, 32>,
     apples_count: u16,
+    draw_init: bool,
 }
 
 fn setval(value: u32, col: u8, set: bool) -> u32 {
@@ -84,6 +88,7 @@ impl <'a> Snake<'a> {
             tail_2: (2, 10),
             facing_2: 3,
             updated_2: false,
+            score: 0,
             active_2: true,
             apple: (10, 3),
             frame,
@@ -91,10 +96,12 @@ impl <'a> Snake<'a> {
             body_2,
             apples,
             apples_count: 0,
+            draw_init: false,
         }
     }
     pub fn init(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
         // info!("frame: {:?}", self.frame);
+        self.draw_init = false;
         self.frame[3] = setval(self.frame[3], 3, true);
         self.frame[3] = setval(self.frame[3], 4, true);
         self.frame[3] = setval(self.frame[3], 5, true);
@@ -127,7 +134,7 @@ impl <'a> Snake<'a> {
         }
     }
 
-    fn update_frame(&mut self) -> bool {
+    fn update_frame(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) -> bool {
         if self.active_1 {
             match self.facing_1 {
                 0 => self.head_1.1 = if self.head_1.1 > 0 { self.head_1.1 - 1 } else { 23 },
@@ -185,6 +192,15 @@ impl <'a> Snake<'a> {
                     // return false;
                 } else if checkval(self.apples[self.head_1.1 as usize], self.head_1.0) {
                     self.apples[self.head_1.1 as usize] = setval(self.apples[self.head_1.1 as usize], self.head_1.0, false);
+                    self.score += 100;
+                    Rectangle::new(Point::new(34, 2), Size::new(80, 8))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                        .draw(screen)
+                        .unwrap();
+                    let mut temp: String<20> = String::new();
+                    fmt::write(&mut temp, format_args!("{}", self.score)).unwrap();
+                    Text::new( &temp, Point::new(35, 8), MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE))
+                        .draw(screen).unwrap();
                     self.apples_count -= 1;
                 } else {
                     match self.body_1.back() {
@@ -195,6 +211,15 @@ impl <'a> Snake<'a> {
                     self.body_1.pop_back();
                 }
             } else {
+                self.score += 100;
+                Rectangle::new(Point::new(34, 2), Size::new(80, 8))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(screen)
+                    .unwrap();
+                let mut temp: String<20> = String::new();
+                fmt::write(&mut temp, format_args!("{}", self.score)).unwrap();
+                Text::new( &temp, Point::new(35, 8), MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE))
+                    .draw(screen).unwrap();
                 self.generate_apple();
             }
 
@@ -239,6 +264,15 @@ impl <'a> Snake<'a> {
                     // return false;
                 } else if checkval(self.apples[self.head_2.1 as usize], self.head_2.0) {
                     self.apples[self.head_2.1 as usize] = setval(self.apples[self.head_2.1 as usize], self.head_2.0, false);
+                    self.score += 100;
+                    Rectangle::new(Point::new(34, 2), Size::new(80, 8))
+                        .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                        .draw(screen)
+                        .unwrap();
+                    let mut temp: String<20> = String::new();
+                    fmt::write(&mut temp, format_args!("{}", self.score)).unwrap();
+                    Text::new( &temp, Point::new(35, 8), MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE))
+                        .draw(screen).unwrap();
                     self.apples_count -= 1;
                 } else {
                     match self.body_2.back() {
@@ -249,6 +283,15 @@ impl <'a> Snake<'a> {
                     self.body_2.pop_back();
                 }
             } else {
+                self.score += 100;
+                Rectangle::new(Point::new(34, 2), Size::new(80, 8))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(screen)
+                    .unwrap();
+                let mut temp: String<20> = String::new();
+                fmt::write(&mut temp, format_args!("{}", self.score)).unwrap();
+                Text::new( &temp, Point::new(35, 8), MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE))
+                    .draw(screen).unwrap();
                 self.generate_apple();
             }
             match self.body_2.front() {
@@ -299,6 +342,13 @@ impl <'a> Snake<'a> {
     }
 
     fn draw(&mut self, screen: &mut mipidsi::Display<SpiInterface<'_, &mut SpiDevice<'_, NoopRawMutex, Spi<'_, embassy_rp::peripherals::SPI1, embassy_rp::spi::Blocking>, Output<'_>>, Output<'_>>, ST7735s, Output<'_>>) {
+        if self.draw_init == false {
+            let mut temp: String<20> = String::new();
+            fmt::write(&mut temp, format_args!("Score: {}", self.score)).unwrap();
+            Text::new(&temp, Point::new(0, 8), MonoTextStyle::new(&FONT_5X8, Rgb565::WHITE))
+                .draw(screen).unwrap();
+            self.draw_init = true;
+        }
         if self.active_1 == false || self.active_2 == false {
             for (index, value) in self.apples.iter().enumerate() {
                 for j in 0..31 {
@@ -503,7 +553,7 @@ impl <'a> Snake<'a> {
                 }
                 _ => {}
             }
-            if self.update_frame() == true {
+            if self.update_frame(screen) == true {
                 self.draw(screen);
             } else {
                 info!("game over!");
