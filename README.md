@@ -27,7 +27,7 @@ All featured games support multiplayer for 2 players.
 - ST7735 128x160 screen
 
 ### Installing on the RP Pico 2W
-This console relies on a [this webserver](https://github.com/addrian-77/rust-webserver) running on a separate device. 
+This console relies on [this webserver](https://github.com/addrian-77/rust-webserver) running on a separate device. 
 <br>
 It works by connecting to the hotspot of the device (change **WIFI_SSID.txt** and **WIFI_PASSWORD.txt** accordingly!).
 - #### 1. Installing the webserver
@@ -40,8 +40,14 @@ It works by connecting to the hotspot of the device (change **WIFI_SSID.txt** an
 - #### 2. The wiring configuration
   Make sure your components are wired correctly. If so, you can go to the next step.
   ![wiring_diagram-c4f1ad60a075d0dd17c390678627b1a1](https://github.com/user-attachments/assets/fea0777e-5f57-4f19-85fb-2254e71713cc)
-
-- #### 3. Flashing the RP Pico 2W
+- #### 3. Installing the Wi-Fi driver
+  For a faster flashing, the [cyw43-firmware](https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware) is hardcoded on the board.
+  This can be achieved using the following commands
+  ```
+  probe-rs download ./cyw43-firmware/43439A0.bin --binary-format bin --chip RP235x --base-address 0x10100000
+  probe-rs download ./cyw43-firmware/43439A0_clm.bin --binary-format bin --chip RP235x --base-address 0x10140000
+  ```
+- #### 4. Flashing the RP Pico 2W
   ```
   git clone https://github.com/addrian-77/rust-pico-console
   cd ./rust-pico-console
